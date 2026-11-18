@@ -22,6 +22,8 @@ const icons = {
   star: '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z"/>',
   attach: '<path d="m8 13 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l9-9m-6 12 7-7"/>'
 };
+icons.lock = '<rect x="5.5" y="10" width="13" height="10" rx="2.5"/><path d="M8.5 10V7a3.5 3.5 0 0 1 7 0v3m-3.5 4v2"/>';
+icons.hash = '<path d="m10 4-3 16M17 4l-3 16M5 9h15M4 15h15"/>';
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const icon = key => `<svg viewBox="0 0 24 24" aria-hidden="true">${icons[key] || icons.chat}</svg>`;
 const imageOrIcon = (key, fallback) => state.settings[key] ? `<img src="${esc(state.settings[key])}" alt="">` : icon(fallback);
@@ -36,7 +38,8 @@ function accountAvatar(id, small = false) {
 function directUserId(channel) { return (channel.name || '').split('__').find(id => id !== state.me.id) || state.me.id; }
 function conversationAvatar(channel, small = false) {
   if (channel.type === 'D') return accountAvatar(directUserId(channel), small);
-  return `<span class="avatar channel-avatar${small ? ' small' : ''}" aria-hidden="true">${channel.type === 'G' ? icon('people') : channel.type === 'P' ? '▣' : '#'}</span>`;
+  const label = channel.type === 'G' ? '그룹 대화' : channel.type === 'P' ? '비공개 채널' : '공개 채널';
+  return `<span class="avatar channel-avatar channel-type-${esc(String(channel.type || 'O').toLowerCase())}${small ? ' small' : ''}" title="${label}" aria-hidden="true">${icon(channel.type === 'G' ? 'people' : channel.type === 'P' ? 'lock' : 'hash')}</span>`;
 }
 document.addEventListener('error', event => { if (event.target.matches?.('img[data-avatar]')) event.target.remove(); }, true);
 const clock = value => value ? new Date(value).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -213,17 +216,33 @@ function renderShell() {
   });
   renderChannelList(); renderChat(); incoming.render();
 }
+let channelListView = '';
 function renderChannelList() {
-  if (!$('#channel-list')) return;
+  const list = $('#channel-list'); if (!list) return;
+  const view = JSON.stringify([state.generation, state.filter, state.search]);
+  const oldTop = view === channelListView ? list.scrollTop : 0;
+  channelListView = view;
+  const focused = list.contains(document.activeElement) ? document.activeElement : null;
+  const focusKey = focused?.dataset.favorite ? ['favorite', focused.dataset.favorite] : focused?.dataset.channel ? ['channel', focused.dataset.channel] : null;
   const channels = state.channels.filter(c => (state.filter === 'all' || (state.filter === 'favorite' ? state.favorites.has(c.id) : state.filter === 'direct' ? c.type === 'D' : state.filter === 'group' ? c.type === 'G' : ['O', 'P'].includes(c.type))) && `${channelName(c)} ${c.type === 'D' ? state.users[directUserId(c)]?.username || '' : ''}`.toLowerCase().includes(state.search.toLowerCase()));
-  const renderRow = c => {
+  const renderRow = (c, showTeam) => {
     const name = channelName(c);
     const account = c.type === 'D' ? state.users[directUserId(c)] : null;
     const teamLabel = ['O', 'P'].includes(c.type) ? state.teams[c.team_id]?.display_name : '';
-    return `<div class="conversation-row"><button class="chat-row ${state.selected === c.id ? 'selected' : ''}" data-channel="${esc(c.id)}" aria-pressed="${state.selected === c.id}">${conversationAvatar(c)}<span class="summary"><span class="row-title">${esc(name)}</span>${account ? `<span class="account-handle">@${esc(account.username)}</span>` : teamLabel ? `<span class="account-handle">${esc(teamLabel)} · ${c.type === 'P' ? '비공개' : '공개'}</span>` : ''}<span class="row-preview" style="display:block">${esc(state.previews[c.id] || c.header || (c.type === 'D' ? '개인 DM' : c.type === 'G' ? '그룹 대화' : c.type === 'P' ? '비공개 채널' : '공개 채널'))}</span></span><span class="row-meta"><span>${clock(c.last_post_at)}</span>${state.unread[c.id] ? `<span class="badge">${state.unread[c.id]}</span>` : ''}</span></button>${favoriteButton(c)}</div>`;
+    const rawPreview = RichText.preview(state.previews[c.id] || c.header || '');
+    const preview = /^(?:비공개 채널|공개 채널|그룹 대화|개인 DM)$/.test(rawPreview) ? '' : rawPreview;
+    const kind = c.type === 'P' ? '비공개 채널' : c.type === 'O' ? '공개 채널' : c.type === 'G' ? '그룹 대화' : '개인 DM';
+    const context = account ? `@${account.username}` : showTeam && teamLabel ? teamLabel : !preview ? kind : '';
+    const date = new Date(c.last_post_at), validDate = c.last_post_at && Number.isFinite(date.getTime());
+    const time = validDate ? date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+    return `<div class="conversation-row ${state.selected === c.id ? 'is-selected' : ''} ${state.unread[c.id] ? 'has-unread' : ''}"><button class="chat-row ${state.selected === c.id ? 'selected' : ''}" data-channel="${esc(c.id)}" aria-pressed="${state.selected === c.id}">${conversationAvatar(c)}<span class="summary"><span class="row-title" title="${esc(name)}">${esc(name)}</span>${context ? `<span class="account-handle">${esc(context)}</span>` : ''}${preview ? `<span class="row-preview">${esc(preview)}</span>` : ''}</span><span class="row-meta"><time class="row-time" ${validDate ? `datetime="${date.toISOString()}" title="${esc(date.toLocaleString('ko-KR'))}"` : ''}>${time}</time>${state.unread[c.id] ? `<span class="badge">${esc(state.unread[c.id])}</span>` : ''}</span></button>${favoriteButton(c)}</div>`;
   };
   const sections = [];
-  const append = (label, items, key) => { if (items.length) sections.push(`<section class="list-section" data-section="${esc(key)}"><h2 class="list-section-title">${esc(label)}<span>${items.length}</span></h2>${items.map(renderRow).join('')}</section>`); };
+  const append = (label, items, key) => {
+    if (!items.length) return;
+    const symbol = key === 'favorites' ? 'star' : key === 'groups' ? 'people' : ['direct', 'new-messages'].includes(key) ? 'chat' : 'hash';
+    sections.push(`<section class="list-section" data-section="${esc(key)}"><h2 class="list-section-title">${icon(symbol)}<span class="section-name">${esc(label)}</span><span class="section-count">${items.length}</span></h2>${items.map(c => renderRow(c, ['favorites', 'new-messages'].includes(key))).join('')}</section>`);
+  };
   append('새 메시지', channels.filter(c => incoming.has(c.id)), 'new-messages');
   append('즐겨찾기', channels.filter(c => state.favorites.has(c.id) && !incoming.has(c.id)), 'favorites');
   const rest = channels.filter(c => !state.favorites.has(c.id) && !incoming.has(c.id));
@@ -231,9 +250,12 @@ function renderChannelList() {
   for (const teamId of teamIds) append(`${state.teams[teamId]?.display_name || '팀'} · 채널`, rest.filter(c => ['O', 'P'].includes(c.type) && (c.team_id || '') === teamId), `team-${teamId}`);
   append('그룹 대화', rest.filter(c => c.type === 'G'), 'groups');
   append('개인 DM', rest.filter(c => c.type === 'D'), 'direct');
-  $('#channel-list').innerHTML = sections.join('') || `<p class="empty">${state.filter === 'favorite' ? '채널이나 대화의 별을 눌러<br>즐겨찾기에 추가해 보세요.' : '표시할 대화방이 없어요.'}</p>`;
+  list.innerHTML = sections.join('') || `<p class="empty">${state.filter === 'favorite' ? '채널이나 대화의 별을 눌러<br>즐겨찾기에 추가해 보세요.' : '표시할 대화방이 없어요.'}</p>`;
+  list.setAttribute('tabindex', '0'); list.setAttribute('role', 'region'); list.setAttribute('aria-label', '대화 목록');
   document.querySelectorAll('[data-channel]').forEach(button => button.onclick = () => selectChannel(button.dataset.channel));
   bindFavorites();
+  list.scrollTop = oldTop;
+  if (focusKey) list.querySelector(`[data-${focusKey[0]}="${CSS.escape(focusKey[1])}"]`)?.focus({ preventScroll: true });
 }
 async function selectChannel(id) {
   historyPositionCleanup();

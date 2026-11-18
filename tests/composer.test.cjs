@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { render } = require('../src/format.js');
+const { render, preview } = require('../src/format.js');
 const { MattermostClient } = require('../electron/client.cjs');
 test('formats text effects without interpreting HTML or unsafe links', () => {
   assert.equal(render('**굵게** *기울임* ~~취소~~ `code`'), '<strong>굵게</strong> <em>기울임</em> <s>취소</s> <code class="inline-code">code</code>');
@@ -37,4 +37,10 @@ test('uploads multipart file, posts attachments without text, and saves per-user
   assert.deepEqual(JSON.parse(calls.at(-1).options.body), [{ user_id: me, category: 'favorite_channel', name: channel, value: 'false' }]);
   await assert.rejects(client.send(channel, '', ['../bad']), /식별자/);
   await assert.rejects(client.setFavorite('../bad', true), /식별자/);
+});
+test('conversation previews show readable text without formatting markers or HTML execution', () => {
+  assert.equal(preview('#### 💌 새 소식 **발신:** _디자인팀_\n> 다음 주에 만나요'), '💌 새 소식 발신: 디자인팀 다음 주에 만나요');
+  assert.equal(preview('[자료 확인](https://example.com)\n- `수정 사항`\n~~완료~~'), '자료 확인 수정 사항 완료');
+  assert.equal(preview('<img src=x onerror=alert(1)>'), '<img src=x onerror=alert(1)>');
+  assert.equal(preview(null), '');
 });

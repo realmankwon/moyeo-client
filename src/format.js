@@ -24,6 +24,16 @@
     }).join('\n');
     return text.replace(/\u0000(\d+)\u0000/g, (_, index) => tokens[Number(index)] || '');
   }
-  const api = { render, escape };
+  function preview(value) {
+    return String(value ?? '').replace(/\r\n/g, '\n')
+      .replace(/```[^\n`]*\n([\s\S]*?)```/g, '$1')
+      .replace(/!\[([^\]\n]*)\]\([^\s)]+\)/g, (_, label) => label || '이미지')
+      .replace(/\[([^\]\n]+)\]\(https?:\/\/[^\s)]+\)/g, '$1')
+      .replace(/(^|\n)\s{0,3}(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+\.\s+)/g, '$1')
+      .replace(/(\*\*|__|~~)([\s\S]+?)\1/g, '$2')
+      .replace(/(^|[\s(])(?:\*([^*\n]+)\*|_([^_\n]+)_)/g, (_, prefix, a, b) => prefix + (a ?? b))
+      .replace(/`([^`\n]+)`/g, '$1').replace(/\s+/g, ' ').trim();
+  }
+  const api = { render, escape, preview };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.RichText = api;
 })(globalThis);
