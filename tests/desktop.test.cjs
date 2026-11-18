@@ -23,6 +23,14 @@ test('close hides to tray, notification restores its room, sound is controllable
   desktop.lastSound = 0; desktop.notify({ channel: 'b'.repeat(26), title: '새 대화' }, epoch);
   assert.equal(sent.filter(([event]) => event === 'incoming:sound').length, sounds);
   desktop.setCount(2); assert.match(desktop.tray.tooltip, /2개 대화방/);
+  const updateCount = notices.length;
+  desktop.notifyUpdate({ phase: 'available', nextVersion: '0.15.0' });
+  desktop.notifyUpdate({ phase: 'available', nextVersion: '0.15.0' });
+  assert.equal(notices.length, updateCount + 1, 'Only one background notification per release');
+  assert.match(notices.at(-1).options.title, /새 버전 0\.15\.0/);
+  notices.at(-1).emit('click'); assert.equal(visible, true); assert.equal(focused, true);
+  desktop.notifyUpdate({ phase: 'available', nextVersion: '0.16.0' });
+  assert.equal(notices.length, updateCount + 1, 'Foreground discovery uses the in-app banner');
   desktop.tray.menu.find(item => item.label === '완전히 종료').click();
   prevented = false; win.emit('close', { preventDefault: () => { prevented = true; } }); assert.equal(prevented, false);
   app.emit('will-quit'); assert.equal(desktop.tray.destroyed,true);

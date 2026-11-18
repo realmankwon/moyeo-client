@@ -43,6 +43,26 @@ jobs:
           path: |
             dist/${{ inputs.mode == 'preview' && 'preview' || 'release' }}/*.exe
           if-no-files-found: error
+  release-metadata:
+    needs: [windows, mac]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: '*-${{ inputs.mode }}'
+          path: dist/release
+          merge-multiple: true
+      - name: Validate all platform files and generate notification metadata
+        run: node scripts/release-manifest.cjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-metadata-${{ inputs.mode }}
+          path: dist/release/moyeo-release.json
+          if-no-files-found: error
   mac:
     runs-on: macos-latest
     env:

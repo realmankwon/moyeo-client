@@ -75,8 +75,8 @@ if (singleInstance) app.whenReady().then(() => {
     if (updates.snapshot().phase !== 'available') return false;
     return quitForInstall({ app, dialog, win });
   }));
-  updates.on('change', value => chatWindows.broadcast('updates:state', value));
-  updates.start();
+  updates.on('change', value => { chatWindows.broadcast('updates:state', value); desktop.notifyUpdate(value); });
+  updates.start({ window: win, powerMonitor: electron.powerMonitor });
   handle('settings:importLegacy', () => mainOnly(async () => {
     if (client.me) throw Error('로그아웃 후 이전 데이터를 가져와 주세요.');
     const result = await dialog.showOpenDialog(win, { title: '기존 포터블 EXE 옆 Data 폴더 선택', properties: ['openDirectory'] });

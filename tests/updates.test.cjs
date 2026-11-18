@@ -29,7 +29,7 @@ test('Windows and both Mac architectures announce releases and open only the tru
     await service.openDownload(); assert.equal(opened.length, 0);
     await service.check(); assert.equal(service.snapshot().phase, 'available'); assert.equal(service.snapshot().nextVersion, '0.15.0');
     assert.equal(opened.length, 0, 'Checking must not open a browser');
-    assert.equal(requests.length, 1); assert.equal(requests[0].url, 'https://api.github.com/repos/owner/releases/releases/latest');
+    assert.equal(requests.length, 1); assert.equal(requests[0].url, 'https://github.com/owner/releases/releases/latest/download/moyeo-release.json');
     assert.equal(requests[0].init.credentials, 'omit'); assert.equal(requests[0].init.headers.Authorization, undefined);
     await service.openDownload(); assert.deepEqual(opened, ['https://github.com/owner/releases/releases/tag/v0.15.0']);
     assert.equal(requests.length, 1, 'Opening guidance must not fetch a binary');
@@ -79,4 +79,48 @@ test('missing releases, network errors and malformed metadata are safe and retry
 test('repository validation refuses URL credentials and path traversal', () => {
   for (const value of ['../releases', 'owner/..', 'owner/repo/other', 'owner@evil/repo', 'https://github.com/a/b', 'owner/repo?token=x']) assert.equal(validRepository(value), false, value);
   assert.equal(validRepository('realmankwon/moyeo-client'), true);
+});
+test('startup, minute polling, focus and wake find releases without manual checks and detach on stop', async t => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout', 'setInterval'], now: 0 });
+  const window = new EventEmitter(), powerMonitor = new EventEmitter();
+  let version = '0.14.1';
+  const { service, app, requests } = fixture({ request: async (url, init) => { requests.push({ url, init }); return Response.json(release(version)); } });
+  const settle = () => new Promise(resolve => setImmediate(resolve));
+  service.start({ window, powerMonitor }); service.start({ window, powerMonitor });
+  t.mock.timers.tick(2000); await settle(); assert.equal(service.snapshot().phase, 'current'); assert.equal(requests.length, 1);
+  version = '0.15.0'; t.mock.timers.tick(58000); await settle();
+  assert.equal(service.snapshot().phase, 'available'); assert.equal(requests.length, 2);
+  window.emit('focus'); window.emit('show'); powerMonitor.emit('resume'); await settle(); assert.equal(requests.length, 2, 'burst events share the recent result');
+  t.mock.timers.tick(31000); version = '0.16.0'; window.emit('focus'); await settle(); assert.equal(service.snapshot().nextVersion, '0.16.0');
+  t.mock.timers.tick(31000); version = '0.17.0'; powerMonitor.emit('resume'); await settle(); assert.equal(service.snapshot().nextVersion, '0.17.0');
+  const count = requests.length; app.emit('before-quit'); t.mock.timers.tick(120000); window.emit('restore'); powerMonitor.emit('resume'); await settle();
+  assert.equal(requests.length, count); assert.equal(window.listenerCount('focus'), 0); assert.equal(app.listenerCount('activate'), 0);
+});
+test('temporary lookup failure keeps a previously discovered update visible and downloadable', async () => {
+  let offline = false;
+  const { service, opened } = fixture({ request: async () => { if (offline) throw Error('offline'); return Response.json(release()); } });
+  await service.check(); offline = true; await service.check();
+  assert.equal(service.snapshot().phase, 'available'); assert.equal(service.snapshot().checkFailed, true);
+  await service.openDownload(); assert.deepEqual(opened, ['https://github.com/owner/releases/releases/tag/v0.15.0']);
+});
+test('missing manifests fall back to REST sparingly and respect server rate-limit reset', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: 0 });
+  let apiCalls = 0;
+  const { service } = fixture({ request: async url => {
+    if (url.startsWith('https://github.com/')) return new Response('', { status: 404 });
+    apiCalls++; return new Response('', { status: 429, headers: { 'x-ratelimit-reset': '3600' } });
+  } });
+  await service.check({ automatic: true }); assert.equal(apiCalls, 1);
+  t.mock.timers.tick(60000); await service.check({ automatic: true }); await service.check(); assert.equal(apiCalls, 1);
+  t.mock.timers.tick(3600000); await service.check({ automatic: true }); assert.equal(apiCalls, 2);
+});
+test('metadata redirects outside GitHub are rejected and only the fixed REST fallback is requested', async () => {
+  const urls = [];
+  const { service } = fixture({ request: async url => {
+    urls.push(url); const response = Response.json(release());
+    if (url.startsWith('https://github.com/')) Object.defineProperty(response, 'url', { value: 'https://untrusted.example.com/feed' });
+    return response;
+  } });
+  await service.check(); assert.equal(service.snapshot().phase, 'available');
+  assert.deepEqual(urls.map(url => new URL(url).hostname), ['github.com', 'api.github.com']);
 });

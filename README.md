@@ -4,7 +4,7 @@ Mattermost 서버에 연결하는 독립 Electron 클라이언트입니다. 카�
 
 ## 실행
 
-Windows는 `Moyeo-0.14.4-Setup-x64.exe` 설치형, Mac은 Apple Silicon·Intel용 PKG 설치 파일과 DMG·ZIP을 제공합니다(macOS 13 이상). 포터블 배포는 중단했습니다. 두 운영체제 모두 새 버전을 확인해 앱 안에 알리고, **다운로드 페이지 열기**를 누르면 GitHub 릴리스 페이지를 기본 브라우저로 엽니다. 파일 다운로드와 설치는 사용자가 직접 진행합니다. Mac은 Developer ID 없이 ad-hoc 서명으로 빌드할 수 있으며 최초 실행 시 보안 승인이 필요할 수 있습니다. 배포 설정은 [새 버전 안내](docs/updates.md)를 참고하세요.
+Windows는 `Moyeo-0.14.5-Setup-x64.exe` 설치형, Mac은 Apple Silicon·Intel용 PKG 설치 파일과 DMG·ZIP을 제공합니다(macOS 13 이상). 포터블 배포는 중단했습니다. 두 운영체제 모두 새 버전을 확인해 앱 안에 알리고, **다운로드 페이지 열기**를 누르면 GitHub 릴리스 페이지를 기본 브라우저로 엽니다. 파일 다운로드와 설치는 사용자가 직접 진행합니다. Mac은 Developer ID 없이 ad-hoc 서명으로 빌드할 수 있으며 최초 실행 시 보안 승인이 필요할 수 있습니다. 배포 설정은 [새 버전 안내](docs/updates.md)를 참고하세요.
 
 소스에서 개발할 때는 Node.js 22 이상과 npm이 필요합니다.
 
@@ -14,6 +14,10 @@ npm start
 ```
 
 서버 없이 확인하려면 로그인 화면의 **데모로 체험하기**를 선택하세요. 실제 연결은 서버 주소와 계정·비밀번호(MFA 선택), 또는 개인 액세스 토큰을 입력합니다. 주소에서 프로토콜을 생략하면 IP·localhost에는 HTTP, 도메인에는 HTTPS를 적용합니다. 서버가 다른 프로토콜을 사용하면 `http://` 또는 `https://`를 직접 입력하세요. 누락된 필드와 연결 단계, 네트워크 오류는 로그인 화면에 표시합니다. SSO 브라우저 로그인은 아직 지원하지 않습니다. API는 Mattermost 6.1 이상을 기준으로 사용하며 서버별 호환성 확인이 필요합니다.
+
+## v0.14.5 자동 새 버전 알림
+
+앱을 계속 켜둬도 1분마다 새 배포를 확인합니다. 앱에 돌아오거나 잠자기에서 깨어날 때도 다시 확인합니다. 메신저 상단 안내와 백그라운드 OS 알림으로 알리며, 이미 확인한 안내는 일시적인 조회 오류로 사라지지 않습니다. 이 동작은 0.14.5를 한 번 설치한 뒤 적용됩니다.
 
 ## v0.14.4 설치 개선
 
@@ -158,7 +162,7 @@ API 참고: [Mattermost API](https://docs.mattermost.com/api), [채널 조회](h
 
 Windows NSIS 설치형과 macOS arm64·x64 PKG/DMG/ZIP을 같은 버전·소스로 만듭니다. Mac 앱과 중첩 코드는 ad-hoc 서명하고 네이티브 서명을 검증합니다. Developer ID·Apple 공증은 기본 구성에서 사용하지 않으며 최초 실행 허용이 필요할 수 있습니다. Windows 실행·설치 검증은 Windows에서 별도로 해야 합니다.
 
-GitHub 조회 대상은 `package.json`의 `releaseRepository`이며 기본값은 `realmankwon/moyeo-client`입니다. `MOYEO_UPDATE_REPOSITORY=owner/repo` 환경 변수로 빌드 시 변경할 수 있습니다. 공개 릴리스만 읽으며 GitHub 토큰·Mattermost 서버 주소·로그인 정보·대화를 전송하지 않습니다. 앱은 실행 약 10초 뒤와 4시간마다 확인합니다. 새 정식 버전의 해당 운영체제·아키텍처 설치 파일이 준비되면 알림을 표시합니다. 알림을 누르면 기본 브라우저에서 릴리스 페이지를 열며, 사용자가 내려받아 직접 설치합니다. 자동 다운로드·설치·재시작은 하지 않습니다.
+GitHub 조회 대상은 `package.json`의 `releaseRepository`이며 기본값은 `realmankwon/moyeo-client`입니다. `MOYEO_UPDATE_REPOSITORY=owner/repo` 환경 변수로 빌드 시 변경할 수 있습니다. 공개 릴리스만 읽으며 GitHub 토큰·Mattermost 서버 주소·로그인 정보·대화를 전송하지 않습니다. 앱은 실행 약 2초 뒤와 1분마다 확인하며, 앱 복귀·창 복원·잠자기 복귀 때도 확인합니다(연속 이벤트는 30초 이내 중복 조회하지 않습니다). 새 정식 버전의 해당 운영체제·아키텍처 설치 파일이 준비되면 알림을 표시합니다. 알림을 누르면 기본 브라우저에서 릴리스 페이지를 열며, 사용자가 내려받아 직접 설치합니다. 자동 다운로드·설치·재시작은 하지 않습니다.
 
 `npm run release:all`은 macOS에서 Windows 설치형과 두 Mac 패키지를 함께 생성합니다. Developer ID 인증서 없이 빌드할 수 있습니다. `npm run release:preview`는 별도 폴더에 새 버전 조회를 비활성화한 테스트 파일을 만듭니다.
 

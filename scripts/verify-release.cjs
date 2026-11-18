@@ -9,6 +9,7 @@ const yauzl = require('yauzl');
 const plist = require('plist');
 const { validRepository } = require('../electron/updates.cjs');
 const pkg = require('../package.json');
+const { releaseManifest } = require('./release-manifest.cjs');
 const root = path.resolve(__dirname, '..');
 const args = process.argv.slice(2), preview = args.includes('--preview');
 const output = path.join(root, 'dist', preview ? 'preview' : 'release');
@@ -96,6 +97,7 @@ r=E.parse(sys.argv[1]).getroot(); print(json.dumps({'attributes':r.attrib,'upgra
   } finally { await fs.rm(temporary, { recursive: true, force: true }); }
 }
 (async () => {
+  if (!onlyWin && !onlyMac) assert.deepEqual(JSON.parse(await fs.readFile(path.join(output, 'moyeo-release.json'), 'utf8')), releaseManifest());
   if (!onlyMac) {
     const exe = await fs.readFile(path.join(output, `Moyeo-${pkg.version}-Setup-x64.exe`)); assert.equal(exe.toString('ascii', 0, 2), 'MZ');
     const runtime = await fs.readFile(path.join(output, 'win-unpacked/Moyeo.exe')); assert.equal(runtime.readUInt16LE(runtime.readUInt32LE(0x3c) + 4), 0x8664);

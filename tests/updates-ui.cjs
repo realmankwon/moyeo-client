@@ -11,20 +11,25 @@ const root = path.resolve(__dirname, '..');
   try {
     app = await electron.launch({ ...(env.MOYEO_EXECUTABLE ? { executablePath: env.MOYEO_EXECUTABLE } : {}), args: [...(env.MOYEO_EXECUTABLE ? [] : [root]), `--user-data-dir=${profile}`], env });
     const page = await app.firstWindow();
-    await app.evaluate(({ app, net, shell }) => {
+    await app.evaluate(({ app, net, shell, Notification }) => {
       const policy = process.mainModule.require(app.getAppPath() + '/package.json').moyeoUpdates;
       if (!policy?.enabled) throw Error('Use a release build with version notifications enabled');
       const original = net.fetch.bind(net);
-      globalThis.__releaseRequests = []; globalThis.__downloadPages = []; globalThis.__releaseVersion = '0.15.0';
+      globalThis.__releaseRequests = []; globalThis.__downloadPages = []; globalThis.__releaseVersion = app.getVersion();
+      globalThis.__noticeDisplays = []; globalThis.__releaseError = false;
+      Notification.prototype.show = function () { globalThis.__noticeDisplays.push({ title: this.title }); };
+      const originalNow = Date.now; globalThis.__clockOffset = 0; Date.now = () => originalNow() + globalThis.__clockOffset;
       globalThis.__exitConfirmations = 0; globalThis.__exitResponse = 0;
       net.fetch = (url, options) => {
-        if (String(url) !== `https://api.github.com/repos/${policy.repository}/releases/latest`) return original(url, options);
+        if (![ `https://api.github.com/repos/${policy.repository}/releases/latest`, `https://github.com/${policy.repository}/releases/latest/download/moyeo-release.json` ].includes(String(url))) return original(url, options);
         globalThis.__releaseRequests.push({ url, credentials: options.credentials, headers: options.headers });
+        if (globalThis.__releaseError) return Promise.reject(Error('offline fixture'));
         const version = globalThis.__releaseVersion;
         return Promise.resolve(Response.json({ tag_name: 'v' + version, draft: false, prerelease: false, html_url: 'file:///ignored', assets: ['Setup-x64.exe', 'mac-arm64.dmg', 'mac-x64.dmg'].map(suffix => ({ name: `Moyeo-${version}-${suffix}`, state: 'uploaded' })) }));
       };
       shell.openExternal = async url => { globalThis.__downloadPages.push(url); };
     });
+    await page.evaluate(() => window.messenger.checkForUpdates());
     await app.evaluate(({ dialog }) => {
       dialog.showMessageBox = async (_win, options) => {
         if (options.title !== '새 버전 설치 준비') throw Error('Unexpected dialog');
@@ -36,8 +41,10 @@ const root = path.resolve(__dirname, '..');
     await page.locator('#login-settings').click();
     await expect(page.locator('#update-status')).toContainText(require('../package.json').version);
     await expect(page.locator('#update-action')).toBeEnabled();
-    await page.locator('#update-action').click();
-    await expect(page.locator('#update-banner')).toContainText('0.15.0');
+    // Publish while the app stays running and wait for the real production timer.
+    // Do not click check or synthesize lifecycle events for this first discovery.
+    await app.evaluate(() => { globalThis.__releaseVersion = '0.15.0'; });
+    await expect(page.locator('#update-banner')).toContainText('0.15.0', { timeout: 75000 });
     await expect(page.locator('#update-status')).toContainText('PKG');
     await page.locator('#update-quit').click();
     assert.equal(await app.evaluate(() => globalThis.__exitConfirmations), 1);
@@ -51,6 +58,21 @@ const root = path.resolve(__dirname, '..');
     assert.equal(await page.evaluate(() => typeof window.messenger.installUpdate), 'undefined');
     assert.equal(await page.evaluate(() => typeof window.messenger.downloadUpdate), 'undefined');
     assert.equal(app.windows().length, 1, 'Opening a download page must not restart the app');
+    await app.evaluate(({ BrowserWindow }) => {
+      globalThis.__releaseVersion = '0.15.1'; globalThis.__clockOffset += 31000;
+      const win = BrowserWindow.getAllWindows()[0]; win.hide(); win.show(); win.focus();
+    });
+    await expect(page.locator('#update-banner')).toContainText('0.15.1');
+    await app.evaluate(({ BrowserWindow, powerMonitor }) => {
+      const win = BrowserWindow.getAllWindows()[0]; win.hide();
+      globalThis.__releaseVersion = '0.15.2'; globalThis.__clockOffset += 31000; powerMonitor.emit('resume');
+    });
+    await expect(page.locator('#update-banner')).toContainText('0.15.2');
+    await expect.poll(() => app.evaluate(() => globalThis.__noticeDisplays.filter(n => n.title.includes('0.15.2')).length)).toBe(1);
+    await app.evaluate(({ BrowserWindow }) => { const win = BrowserWindow.getAllWindows()[0]; win.show(); win.focus(); globalThis.__releaseError = true; });
+    await page.evaluate(() => window.messenger.checkForUpdates());
+    await expect(page.locator('#update-banner')).toContainText('0.15.2');
+    await app.evaluate(() => { globalThis.__releaseError = false; });
     await page.getByRole('button', { name: '데모로 체험하기' }).click();
     await expect(page.locator('#update-banner')).toBeVisible();
     await expect.poll(() => page.evaluate(() => Math.abs(document.querySelector('.shell').getBoundingClientRect().bottom - innerHeight))).toBeLessThan(2);
@@ -79,6 +101,6 @@ const root = path.resolve(__dirname, '..');
     const closed = new Promise(resolve => app.once('close', resolve));
     await page.locator('#update-banner-quit').click();
     await closed; app = null;
-    console.log('PASS: actual release checker and IPC, version notification, trusted browser page, no install/restart API, wheel/arrow input, canceled exit keeps app running and confirmed installation exit closes process (HTTP, browser and dialog response mocked)');
+    console.log('PASS: real one-minute timer, automatic focus/resume discovery without manual check or restart, background OS-notice request, persistent banner during failure, trusted browser page, wheel/arrow input and installation exit (HTTP, OS notice delivery, browser and dialog response mocked)');
   } finally { if (app) await app.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

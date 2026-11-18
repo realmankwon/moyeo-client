@@ -16,14 +16,14 @@ class DesktopService {
     this.e = electron; this.win = win; this.options = options; this.settings = { name: '모여', soundEnabled: true }; this.count = 0; this.rooms = new Map(); this.notices = new Map(); this.quitting = false; this.lastSound = 0; this.brand = '';
     this.tray = new electron.Tray(this.image());
     this.tray.on('click', () => this.show()); this.tray.on('double-click', () => this.show());
-    this.tray.on('balloon-click', () => { if (this.balloon) this.open(this.balloon.channel, this.balloon.epoch); });
+    this.tray.on('balloon-click', () => { if (this.balloon?.update) this.show(); else if (this.balloon) this.open(this.balloon.channel, this.balloon.epoch); });
     this.tray.on('balloon-closed', () => { this.balloon = null; });
     win.on('close', event => { if (!this.quitting) { event.preventDefault(); win.hide(); } });
     win.on('query-session-end', () => { this.quitting = true; });
     win.on('session-end', () => { this.quitting = true; });
     win.on('focus', () => win.flashFrame(false));
     electron.app.on('before-quit', () => { this.quitting = true; });
-    electron.app.on('will-quit', () => { for (const notice of this.notices.values()) notice.close(); this.tray.destroy(); });
+    electron.app.on('will-quit', () => { this.updateNotice?.close(); for (const notice of this.notices.values()) notice.close(); this.tray.destroy(); });
     this.refresh();
   }
   image() {
@@ -55,6 +55,21 @@ class DesktopService {
         try { notice.show(); } catch { balloon(); }
       } else balloon();
     }
+  }
+  notifyUpdate(value) {
+    if (value.phase !== 'available' || !value.nextVersion || value.nextVersion === this.updateVersion) return;
+    this.updateVersion = value.nextVersion;
+    if (this.win.isFocused()) return;
+    this.win.flashFrame(true);
+    const title = `${this.settings.name || '모여'} 새 버전 ${value.nextVersion}`;
+    const body = '클릭하면 메신저에서 새 버전 다운로드 안내를 확인할 수 있습니다.';
+    const balloon = () => { this.balloon = { update: true }; this.tray.displayBalloon?.({ title, content: body, noSound: true, respectQuietTime: true }); };
+    if (!this.e.Notification.isSupported()) { balloon(); return; }
+    this.updateNotice?.close();
+    try {
+      const notice = new this.e.Notification({ title, body, silent: true }); this.updateNotice = notice;
+      notice.on('click', () => this.show()); notice.once('failed', balloon); notice.show();
+    } catch { balloon(); }
   }
   read(channel) { this.rooms.delete(channel); this.notices.get(channel)?.close(); this.notices.delete(channel); this.refresh(); }
   setCount(count) { this.count = count; if (!count) { this.rooms.clear(); for (const notice of this.notices.values()) notice.close(); this.notices.clear(); this.win.flashFrame(false); } this.refresh(); }
