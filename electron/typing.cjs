@@ -1,0 +1,25 @@
+const {validId}=require('./client.cjs');
+class TypingService {
+ constructor(client,notify,Socket=WebSocket,events=()=>{}){this.client=client;this.notify=notify;this.Socket=Socket;this.events=events;this.connected=false;this.serial=0;this.last=new Map();}
+ stop(){const wasConnected=this.connected;this.connected=false;this.serial++;clearTimeout(this.retry);clearInterval(this.ping);this.last.clear();this.transmit=null;const socket=this.socket;this.socket=null;if(socket){socket.onclose=null;socket.onopen=null;socket.onmessage=null;socket.close();}if(wasConnected)this.events({type:'disconnected'});}
+ start(){this.stop();const serial=this.serial,epoch=this.client.mediaKey;let failures=0,everConnected=false;
+ const schedule=()=>{if(serial!==this.serial||epoch!==this.client.mediaKey)return;this.retry=setTimeout(connect,Math.min(30000,3000*2**Math.min(failures++,4)));this.retry.unref?.();};
+ const connect=()=>{if(serial!==this.serial||epoch!==this.client.mediaKey||!this.client.me)return;const url=new URL(this.client.server+'/api/v4/websocket');url.protocol=url.protocol==='https:'?'wss:':'ws:';let socket;try{socket=new this.Socket(url.href);}catch{schedule();return;}this.socket=socket;let seq=1,awaiting=false,expected=null;
+ const send=(action,data)=>{if(socket.readyState===1)socket.send(JSON.stringify({seq:seq++,action,data}));};
+ this.transmit=send;
+ socket.onopen=()=>{if(serial!==this.serial)return;failures=0;send('authentication_challenge',{token:this.client.token});clearInterval(this.ping);this.ping=setInterval(()=>{if(awaiting){socket.close();return;}awaiting=true;send('ping',{});},30000);this.ping.unref?.();};
+ socket.onerror=()=>{};
+ socket.onmessage=event=>{if(serial!==this.serial||epoch!==this.client.mediaKey)return;let message;try{message=JSON.parse(event.data);}catch{return;}if(message.seq_reply){awaiting=false;return;}
+ if(Number.isInteger(message.seq)){if(expected!==null&&expected!==message.seq)this.events({type:'refresh',reason:'sequence_gap'});expected=message.seq+1;}
+ if(message.event==='hello'){this.connected=true;this.events({type:'connected',reconnected:everConnected});everConnected=true;return;}
+ const data=message.data||{};
+ if(message.event==='typing'){try{validId(data.user_id);validId(message.broadcast?.channel_id||data.channel_id);}catch{return;}if(data.user_id!==this.client.me?.id)this.notify({user_id:data.user_id,channel_id:message.broadcast?.channel_id||data.channel_id,parent_id:data.parent_id||''});return;}
+ try{if(['posted','post_edited','post_deleted'].includes(message.event)){const post=typeof data.post==='string'?JSON.parse(data.post):data.post;validId(post.id);validId(post.channel_id);this.events({type:message.event,post});}
+ else if(['reaction_added','reaction_removed'].includes(message.event)){const reaction=typeof data.reaction==='string'?JSON.parse(data.reaction):data.reaction;validId(reaction.post_id);validId(reaction.user_id);if(typeof reaction.emoji_name==='string')this.events({type:message.event,reaction});}
+ else if(['channel_created','channel_updated','channel_deleted','user_added','user_removed','added_to_team','leave_team','preferences_changed','user_updated','config_changed'].includes(message.event))this.events({type:'refresh',reason:message.event});}catch{/* Ignore malformed events. */}
+ };
+ socket.onclose=()=>{clearInterval(this.ping);if(serial!==this.serial||epoch!==this.client.mediaKey)return;this.connected=false;this.events({type:'disconnected'});if(this.socket===socket)this.socket=null;schedule();};
+ };connect();}
+ send(channel,parent=''){validId(channel);if(parent)validId(parent);if(!this.client.me||this.socket?.readyState!==1)return;const key=channel+':'+parent,now=Date.now();if(now-(this.last.get(key)||0)<3000)return;this.last.set(key,now);this.transmit?.('user_typing',{channel_id:channel,parent_id:parent});}
+}
+module.exports={TypingService};

@@ -1,0 +1,3 @@
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const {StartupService}=require('../electron/startup.cjs');
+test('Mac login settings use native login items without Windows executable options',()=>{let saved,enabled=false;const app={isPackaged:true,getLoginItemSettings(options){assert.deepEqual(options,{});return{openAtLogin:enabled};},setLoginItemSettings(options){saved=options;enabled=options.openAtLogin;}};const startup=new StartupService(app,{},'/Applications/Moyeo.app/Contents/MacOS/Electron','Moyeo','darwin');assert.equal(startup.get(),false);assert.equal(startup.set(true),true);assert.deepEqual(saved,{openAtLogin:true,openAsHidden:true});assert.equal(startup.set(false),false);});

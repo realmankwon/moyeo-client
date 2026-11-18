@@ -1,0 +1,190 @@
+const electron = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, nativeImage, protocol, net, clipboard } = electron;
+const path = require('node:path');
+const fs = require('node:fs/promises');
+const { pathToFileURL } = require('node:url');
+const { MattermostClient } = require('./client.cjs');
+const { registerFiles } = require('./files.cjs');
+const { registerComposer } = require('./composer.cjs');
+const { PersonalStore } = require('./personal.cjs');
+const { GiphyService } = require('./giphy.cjs');
+const { configurePortable } = require('./portable.cjs');
+const { DesktopService } = require('./desktop.cjs');
+const { SessionStore } = require('./session.cjs');
+const { StartupService } = require('./startup.cjs');
+const { TypingService } = require('./typing.cjs');
+const { ConsoleService } = require('./console.cjs');
+const { ChatWindows } = require('./chat-windows.cjs');
+const { UpdateService } = require('./updates.cjs');
+const { importLegacyData } = require('./migrate-data.cjs');
+// Keep the existing app-data path and macOS encryption identity across installer builds.
+app.setName('moyeo-mattermost-client');
+if (!app.commandLine.hasSwitch('user-data-dir')) {
+  const data = path.join(app.getPath('appData'), 'moyeo-mattermost-client');
+  require('node:fs').mkdirSync(data, { recursive: true });
+  app.setPath('userData', data);
+}
+configurePortable(app);
+const singleInstance = app.requestSingleInstanceLock();
+if (!singleInstance) app.quit();
+protocol.registerSchemesAsPrivileged([{ scheme: 'moyeo-media', privileges: { standard: true, secure: true, stream: true } },{scheme:'moyeo-assets',privileges:{standard:true,secure:true,supportFetchAPI:true,corsEnabled:true}}]);
+const client = new MattermostClient();
+const page = pathToFileURL(path.join(__dirname, '../src/index.html')).href;
+const chatWindows = new ChatWindows(electron,client,page);
+let win, desktop;
+const defaults = { name: '모여', accent: '#fee34a', chatBackground: '#e8eef3', logo: '', chatIcon: '', peopleIcon: '', settingsIcon: '', soundEnabled: true, autoLogin: true };
+app.on('second-instance', () => desktop?.show());
+app.on('activate', () => desktop?.show());
+function handle(name, fn) {
+  ipcMain.handle(name, async (event, ...args) => {
+    return chatWindows.invoke(event,()=>fn(...args));
+  });
+}
+async function readSettings() {
+  try { return { ...defaults, ...JSON.parse(await fs.readFile(path.join(app.getPath('userData'), 'appearance.json'), 'utf8')) }; }
+  catch { return { ...defaults }; }
+}
+if (singleInstance) app.whenReady().then(() => {
+  const sessions = new SessionStore(path.join(app.getPath('userData'), 'login.bin'), electron.safeStorage);
+  const startup = new StartupService(app);
+  if (process.platform === 'win32') app.setAppUserModelId('com.moyeo.mattermost');
+  const startHidden = app.commandLine.hasSwitch('start-in-tray') || (process.platform === 'darwin' && app.getLoginItemSettings().wasOpenedAtLogin);
+  win = new BrowserWindow({ skipTaskbar:false, show: !startHidden, width: 1180, height: 800, minWidth: 860, minHeight: 620, backgroundColor: '#f8f9fb',
+    title: '모여 · Mattermost', autoHideMenuBar: true,
+    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true, backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' } });
+  chatWindows.register(win);
+  handle('openFloatingChat',channel=>chatWindows.open(channel));
+  handle('getFloatingContext',()=>chatWindows.floatingContext());
+  handle('setCurrentChannel',(channel,title)=>chatWindows.setChannel(channel,title));
+  handle('getActiveChannels',()=>chatWindows.activeChannels());
+  handle('setFloatingTop',value=>chatWindows.setTop(value));
+  desktop = new DesktopService(electron, win, { session: () => client.mediaKey, saveSound: async enabled => {
+    const settings = await readSettings(); settings.soundEnabled = enabled;
+    await fs.writeFile(path.join(app.getPath('userData'), 'appearance.json'), JSON.stringify(settings)); return settings;
+  } });
+  const updatePolicy = require('../package.json').moyeoUpdates || {};
+  const updates = new UpdateService({ app, enabled: updatePolicy.enabled, repository: updatePolicy.repository,
+    request: (url, options) => net.fetch(url, options), openExternal: url => electron.shell.openExternal(url)
+  });
+  const mainOnly = callback => { if (chatWindows.actor()?.floating) throw Error('업데이트와 데이터 가져오기는 메인 창에서 해주세요.'); return callback(); };
+  handle('updates:state', () => updates.snapshot());
+  handle('updates:check', () => mainOnly(() => updates.check()));
+  handle('updates:openDownload', () => mainOnly(() => updates.openDownload()));
+  updates.on('change', value => chatWindows.broadcast('updates:state', value));
+  updates.start();
+  handle('settings:importLegacy', () => mainOnly(async () => {
+    if (client.me) throw Error('로그아웃 후 이전 데이터를 가져와 주세요.');
+    const result = await dialog.showOpenDialog(win, { title: '기존 포터블 EXE 옆 Data 폴더 선택', properties: ['openDirectory'] });
+    if (result.canceled) return null;
+    return importLegacyData(result.filePaths[0], app.getPath('userData'));
+  }));
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  const typing = new TypingService(client,data=>chatWindows.broadcast('chat:typing',data),WebSocket,event=>chatWindows.broadcast('chat:realtime',event));
+  handle('getRealtimeStatus',()=>({connected:typing.connected}));
+  const systemConsole = new ConsoleService(electron,client,{onLogout:()=>{if(!win.isDestroyed())win.webContents.send('account:logout');}});
+  handle('getConsoleAccess',()=>systemConsole.access());
+  handle('openSystemConsole',()=>systemConsole.open());
+  app.on('before-quit',()=>systemConsole.close());
+  app.on('before-quit', () => typing.stop());
+  handle('sendTyping', (channel,parent) => typing.send(channel,parent));
+  win.webContents.on('will-navigate', event => event.preventDefault());
+  const giphy = new GiphyService(client, (...args) => net.fetch(...args));
+  const personal = new PersonalStore(path.join(app.getPath('userData'), 'personal-settings.json'));
+  const account = () => { if (!client.me) throw new Error('먼저 로그인해 주세요.'); return JSON.stringify([client.server, client.me.id]); };
+  handle('getPersonalSettings', () => personal.get(account()));
+  handle('savePersonalSettings', (field, value) => personal.update(account(), field, value));
+  handle('gifSearch', (term, offset) => { account(); return giphy.search(term, offset); });
+  handle('gifById', id => { account(); return giphy.get(id); });
+  handle('gifReload', () => { giphy.reset(); });
+  for (const method of ['post', 'thread', 'editPost', 'deletePost', 'postLink', 'sharePost']) handle(method, (...args) => client[method](...args));
+  for (const method of ['reactions', 'setReaction']) handle(method, (...args) => client[method](...args));
+  handle('copyText', text => { if (typeof text !== 'string' || text.length > 100000) throw new Error('복사할 내용을 확인해 주세요.'); clipboard.writeText(text); });
+  let incomingCount = 0;
+  handle('notifyIncoming', value => {
+    if(chatWindows.actor()?.floating)return;
+    if (!client.me || typeof value?.title !== 'string') return;
+    require('./client.cjs').validId(value.channel);
+    if(chatWindows.activeChannels().includes(value.channel))return;
+    chatWindows.flash(value.channel);desktop.notify(value, client.mediaKey);
+  });
+  handle('clearIncoming', id => { require('./client.cjs').validId(id); desktop.read(id); });
+  handle('isWindowActive', () => {const owner=chatWindows.owner()||win;return owner.isVisible()&&owner.isFocused()&&!owner.isMinimized();});
+  handle('resolvePostLink', address => client.resolvePostLink(address));
+  handle('searchContent',options=>client.searchContent(options));
+  handle('mentionUsers',(...args)=>client.mentionUsers(...args));
+  handle('setIncomingCount', async count => {
+    if(chatWindows.actor()?.floating)return;
+    if (!Number.isInteger(count) || count < 0 || count > 10000) return;
+    incomingCount = count; const settings = await readSettings(); if (win.isDestroyed() || incomingCount !== count) return;
+    win.setTitle(`${count ? `(${count}) ` : ''}${settings.name} · Mattermost`); app.setBadgeCount(count);
+    desktop.setCount(count);
+  });
+  handle('connect', async data => {
+    if(chatWindows.actor()?.floating)throw Error('계정 변경은 메인 창에서 해주세요.');
+    chatWindows.closeFloating();
+    systemConsole.close(); typing.stop(); resetComposer(); giphy.reset(); await sessions.clear();
+    const user = await client.connect(data);
+    const settings = await readSettings(); settings.autoLogin = data.remember !== false;
+    await fs.writeFile(path.join(app.getPath('userData'), 'appearance.json'), JSON.stringify(settings));
+    if (settings.autoLogin) await sessions.save(client);
+    typing.start();
+    return user;
+  });
+  handle('restoreSession', async () => {
+    if(client.me)return client.withAvatar(client.me);
+    if (!(await readSettings()).autoLogin) return null;
+    const saved = await sessions.load(); if (!saved) return null;
+    try { const user = await client.connect(saved); client.ownedSession = saved.ownedSession; typing.start(); return user; }
+    catch (error) { if (error.status === 401 || error.status === 403) await sessions.clear(); throw error; }
+  });
+  registerFiles(client, handle, () => chatWindows.owner()||win, giphy);
+  const resetComposer = registerComposer(client, handle, () => chatWindows.owner()||win, giphy);
+  handle('disconnect', async () => { chatWindows.closeFloating();systemConsole.close(); typing.stop(); await sessions.clear(); resetComposer(); giphy.reset(); const connected=!!client.me;try{return await client.disconnect();}finally{if(connected)chatWindows.broadcast('account:cleared');} });
+  handle('view',async channel=>{const result=await client.view(channel);chatWindows.read(channel);return result;});
+  handle('send',async(...args)=>{const result=await client.send(...args);chatWindows.broadcast('chat:posted',result);return result;});
+  for (const method of ['channels', 'users', 'posts', 'searchUsers', 'direct', 'teams', 'favorites', 'setFavorite']) handle(method, (...args) => client[method](...args));
+  handle('userProfile', async id => {
+    const user = client.withAvatar((await client.request(`/users/${require('./client.cjs').validId(id)}`)).data);
+    let status = null; try { status = (await client.request(`/users/${id}/status`)).data; } catch { /* Status may be hidden by server policy. */ }
+    return { user, status };
+  });
+  handle('settings:get', async () => ({ ...await readSettings(), startAtLogin: startup.get(), platform: process.platform }));
+  handle('settings:save', async value => {
+    const settings = await readSettings();
+    if (typeof value.name === 'string') settings.name = value.name.trim().slice(0, 24) || defaults.name;
+    for (const key of ['accent', 'chatBackground']) if (/^#[a-f\d]{6}$/i.test(value[key])) settings[key] = value[key];
+    if (typeof value.soundEnabled === 'boolean') settings.soundEnabled = value.soundEnabled;
+    if (typeof value.autoLogin === 'boolean') settings.autoLogin = value.autoLogin;
+    if (value.reset) Object.assign(settings, defaults);
+    if (typeof value.startAtLogin === 'boolean') startup.set(value.startAtLogin);
+    if (!settings.autoLogin) await sessions.clear();
+    else if (client.me) await sessions.save(client);
+    await fs.writeFile(path.join(app.getPath('userData'), 'appearance.json'), JSON.stringify(settings), { mode: 0o600 });
+    win.setTitle(`${settings.name} · Mattermost`);
+    desktop.configure(settings);
+    return { ...settings, startAtLogin: startup.get(), platform: process.platform };
+  });
+  handle('settings:image', async key => {
+    if (!['logo', 'chatIcon', 'peopleIcon', 'settingsIcon'].includes(key)) throw new Error('지원하지 않는 이미지입니다.');
+    const result = await dialog.showOpenDialog(win, { title: '로고 또는 아이콘 가져오기', filters: [{ name: '이미지', extensions: ['png', 'jpg', 'jpeg', 'webp', 'ico'] }], properties: ['openFile'] });
+    if (result.canceled) return null;
+    const file = result.filePaths[0];
+    if ((await fs.stat(file)).size > 5 * 1024 * 1024) throw new Error('5MB 이하 이미지를 선택해 주세요.');
+    const img = nativeImage.createFromPath(file);
+    if (img.isEmpty()) throw new Error('이미지를 읽을 수 없습니다.');
+    const settings = await readSettings();
+    settings[key] = img.resize({ width: 192, height: 192, quality: 'best' }).toDataURL();
+    await fs.writeFile(path.join(app.getPath('userData'), 'appearance.json'), JSON.stringify(settings), { mode: 0o600 });
+    if (key === 'logo') win.setIcon(nativeImage.createFromDataURL(settings.logo));
+    desktop.configure(settings);
+    return { ...settings, startAtLogin: startup.get(), platform: process.platform };
+  });
+  readSettings().then(settings => {
+    if (win.isDestroyed()) return;
+    win.setTitle(`${settings.name} · Mattermost`);
+    desktop.configure(settings);
+    if (settings.logo) win.setIcon(nativeImage.createFromDataURL(settings.logo));
+  });
+  win.loadFile(path.join(__dirname, '../src/index.html'));
+});
+app.on('window-all-closed', () => { if (desktop?.quitting || !desktop) app.quit(); });

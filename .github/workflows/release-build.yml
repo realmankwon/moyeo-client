@@ -1,0 +1,82 @@
+name: Build release packages
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Production enables GitHub version notices; installation stays manual
+        required: true
+        type: choice
+        default: preview
+        options: [preview, production]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      MOYEO_UPDATE_REPOSITORY: ${{ vars.MOYEO_UPDATE_REPOSITORY }}
+      WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+      WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run test:updates
+      - name: Build Windows installer
+        shell: bash
+        run: |
+          if [ '${{ inputs.mode }}' = 'preview' ]; then
+            node scripts/release.cjs --win --preview
+            node scripts/verify-release.cjs --win --preview
+          else
+            npm run dist:win
+            node scripts/verify-release.cjs --win
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ inputs.mode }}
+          path: |
+            dist/${{ inputs.mode == 'preview' && 'preview' || 'release' }}/*.exe
+          if-no-files-found: error
+  mac:
+    runs-on: macos-latest
+    env:
+      MOYEO_UPDATE_REPOSITORY: ${{ vars.MOYEO_UPDATE_REPOSITORY }}
+      MOYEO_MAC_SIGNED: ${{ vars.MOYEO_MAC_SIGNED }}
+      CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run test:updates
+      - name: Build Apple Silicon and Intel packages
+        shell: bash
+        run: |
+          if [ '${{ inputs.mode }}' = 'preview' ]; then
+            node scripts/release.cjs --mac --preview
+            node scripts/verify-release.cjs --mac --preview
+          else
+            npm run dist:mac
+            node scripts/verify-release.cjs --mac
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-${{ inputs.mode }}
+          path: |
+            dist/${{ inputs.mode == 'preview' && 'preview' || 'release' }}/*.dmg
+            dist/${{ inputs.mode == 'preview' && 'preview' || 'release' }}/*.zip
+          if-no-files-found: error

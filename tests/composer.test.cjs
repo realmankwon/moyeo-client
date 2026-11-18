@@ -1,0 +1,40 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { render } = require('../src/format.js');
+const { MattermostClient } = require('../electron/client.cjs');
+test('formats text effects without interpreting HTML or unsafe links', () => {
+  assert.equal(render('**굵게** *기울임* ~~취소~~ `code`'), '<strong>굵게</strong> <em>기울임</em> <s>취소</s> <code class="inline-code">code</code>');
+  const html = render('<img src=x onerror=alert(1)> [bad](javascript:alert)\n```html\n<script>bad()</script>\n```');
+  assert.ok(!html.includes('<script>')); assert.ok(!html.includes('<img'));
+  assert.ok(html.includes('&lt;script&gt;')); assert.ok(!html.includes('data-link'));
+  assert.ok(render('[safe](https://example.com/?a=1&b=2)').includes('data-link="https://example.com/?a=1&amp;b=2"'));
+  assert.ok(render('> hello\n- item').includes('<blockquote>hello</blockquote>'));
+  assert.ok(render(':team:', { team: { image_url: 'moyeo-media://session/emojis/id' } }).includes('inline-emoji'));
+  assert.equal(render(':constructor: :__proto__:'), ':constructor: :__proto__:');
+  const shared = 'https://chat.example.com/example-team/pl/aaaaaaaaaaaaaaaaaaaaaaaaaa';
+  assert.ok(render(shared).includes(`data-link="${shared}"`));
+  assert.ok(render(`원문: (${shared}).`).includes(`data-link="${shared}"`));
+  assert.ok(!render('`https://example.com`').includes('data-link'));
+  assert.ok(!render('https://user:secret@example.com').includes('data-link'));
+});
+test('uploads multipart file, posts attachments without text, and saves per-user favorites', async () => {
+  const me = 'a'.repeat(26), channel = 'b'.repeat(26), file = 'c'.repeat(26), calls = [];
+  const client = new MattermostClient(async (url, options) => {
+    calls.push({ url, options });
+    if (url.endsWith('/files')) return new Response(JSON.stringify({ file_infos: [{ id: file, name: 'hello.txt' }] }));
+    if (url.endsWith('/preferences') && options.method === 'GET') return new Response(JSON.stringify([{ category: 'favorite_channel', name: channel, value: 'true' }, { category: 'favorite_channel', name: file, value: 'false' }]));
+    return new Response('{"status":"OK"}');
+  });
+  client.server = 'https://example.com'; client.token = 'secret'; client.me = { id: me };
+  assert.equal((await client.upload(channel, 'hello.txt', new Blob(['hello']))).id, file);
+  assert.equal(calls.at(-1).options.body.get('channel_id'), channel);
+  assert.equal(await calls.at(-1).options.body.get('files').text(), 'hello');
+  assert.equal(calls.at(-1).options.headers['Content-Type'], undefined);
+  await client.send(channel, '', [file]);
+  assert.deepEqual(JSON.parse(calls.at(-1).options.body).file_ids, [file]);
+  assert.deepEqual(await client.favorites(), [channel]);
+  await client.setFavorite(channel, false);
+  assert.deepEqual(JSON.parse(calls.at(-1).options.body), [{ user_id: me, category: 'favorite_channel', name: channel, value: 'false' }]);
+  await assert.rejects(client.send(channel, '', ['../bad']), /식별자/);
+  await assert.rejects(client.setFavorite('../bad', true), /식별자/);
+});

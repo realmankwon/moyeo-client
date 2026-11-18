@@ -1,0 +1,8 @@
+{
+  "appId": "com.moyeo.mattermost",
+  "productName": "Moyeo",
+  "artifactName": "Moyeo-${version}-portable.${ext}",
+  "directories": { "output": "dist/portable" },
+  "win": { "target": "portable", "signAndEditExecutable": false },
+  "portable": { "requestExecutionLevel": "user" }
+}

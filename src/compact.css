@@ -1,0 +1,43 @@
+/* Compact navigation keeps room names readable while reducing vertical space. */
+.rail{padding:16px 0 12px;gap:16px}
+.rail-nav{gap:8px;margin-top:12px}
+.nav-button{height:48px;gap:4px}
+.rail-bottom{gap:8px}
+.list-head{padding:16px 18px 10px}
+.heading-row h1{font-size:21px}
+.search{margin-top:12px}
+.search input{padding:9px 12px 9px 35px}
+.search svg{top:8px}
+.tabs{margin-top:10px}
+.tabs>.tab{padding:6px 9px}
+.list-scroll{padding:2px 8px}
+.list-section{margin-bottom:6px}
+.list-section-title{padding:10px 12px 5px}
+.chat-row{gap:9px;padding:9px 11px;border-radius:9px;min-height:58px}
+.chat-row>.avatar{width:36px;height:36px;border-radius:12px;font-size:13px}
+.row-preview{margin-top:3px;line-height:1.35}
+.account-handle{margin-top:2px;line-height:1.25}
+.account-handle+.row-preview{margin-top:2px}
+.row-meta{gap:4px}
+.conversation-row .favorite-toggle{top:6px}
+.list-footer{padding:10px 18px}
+.chat-header{padding:11px 22px;gap:10px;min-height:66px}
+.chat-header>.avatar{width:38px;height:38px;border-radius:13px}
+.chat-header h2{margin-bottom:3px}
+.chat-header p{line-height:1.35}
+.chat-header .icon-btn{width:32px;height:32px}
+.header-favorite{height:32px}
+.demo-banner{padding:6px}
+.composer-wrap{padding:8px 20px 10px}
+.format-toolbar{padding-bottom:5px;margin-bottom:8px}
+.composer-wrap textarea{height:54px}
+.send-btn{padding:8px 17px}
+#incoming-header{min-height:54px;padding:7px 16px;gap:14px}
+.incoming-rooms button{padding:5px 10px;gap:3px 12px}
+@media(max-width:960px){.chat-header{padding:10px 16px}.composer-wrap{padding-left:16px;padding-right:16px}}
+.message{margin-bottom:10px}.sender{margin-bottom:4px}.bubble{padding:9px 12px;line-height:1.65}.reaction-bar{margin-top:4px}.message .reaction-bar:not(:has(.reaction-pill)){position:absolute;top:0;left:calc(100% + 5px);margin:0;flex-wrap:nowrap}.message.self .reaction-bar:not(:has(.reaction-pill)){left:auto;right:calc(100% + 5px)}.message.continued>.avatar{visibility:hidden}.message.continued .sender{display:none}.message.continued{margin-top:-3px}.message-target .bubble{outline:3px solid #dba83c;outline-offset:3px;box-shadow:0 0 0 7px #ffe28a40}.typing-indicator{font-size:11px;color:#7d8b9d;padding:6px 22px;background:#ffffff99}.typing-indicator[hidden]{display:none}
+.context-notice{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 18px;font-size:11px;background:#fff4c9;color:#8b7027}.context-notice button{font-size:11px;font-weight:600;padding:4px;color:#6d5b2b}
+.navigation-back{flex-shrink:0;border:1px solid #9da9b64d;border-radius:8px;padding:7px 9px;font-size:11px;color:inherit}.navigation-back:hover{background:#8b9bb022}.media-only>.attachments{margin-top:0}.system-console-entry{width:100%;text-align:left;padding:12px;border:1px solid #dfe4ec;border-radius:9px;font-size:12px;background:#f8faff;color:#526b92}.console-description{font-size:11px;color:#8d97a6;line-height:1.7;margin:8px 0 0}
+body.floating .shell{grid-template-columns:minmax(0,1fr)}body.floating .rail,body.floating .conversation-list,body.floating #incoming-header{display:none}body.floating .chat-header{padding:10px 14px}body.floating .chat-header>div:not(.header-actions){min-width:0}body.floating .chat-header h2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}body.floating .messages{padding:16px}body.floating .composer-wrap{padding:8px 14px}#float-pin[aria-pressed=true]{background:#fff0aa;box-shadow:inset 0 0 0 1px #dec971}
+.status-dot.offline{background:#cf8f7b}
+.mention-popup{position:absolute;bottom:calc(100% + 6px);left:14px;right:14px;max-width:430px;max-height:280px;overflow:auto;background:#fff;color:#3c4c64;border:1px solid #dce3ed;border-radius:11px;box-shadow:0 8px 35px #23344b2b;z-index:9;padding:5px}.mention-popup[hidden]{display:none}.mention-popup>button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px;border-radius:7px}.mention-popup>button.active,.mention-popup>button:hover{background:#eef3ff}.mention-popup>button>span:nth-child(2){display:grid;gap:3px;min-width:0}.mention-popup strong{font-size:12px;font-weight:650}.mention-popup small{font-size:10px;color:#8998ab}.mention-popup .mention-outside{margin-left:auto;font-size:9px;white-space:nowrap}.history-sentinel{text-align:center;color:#929eac;font-size:10px;padding:8px 0 12px;min-height:28px}

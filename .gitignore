@@ -1,0 +1,16 @@
+node_modules/
+dist/
+test-results/
+*.log
+__pycache__/
+*.pyc
+Data/
+.env
+.env.*
+!.env.example
+login.bin
+.DS_Store
+*.p12
+*.pfx
+*.p8
+*.key

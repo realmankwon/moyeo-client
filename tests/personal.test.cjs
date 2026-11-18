@@ -1,0 +1,33 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
+const { PersonalStore, validateTheme } = require('../electron/personal.cjs');
+const { GiphyService, mediaUrl } = require('../electron/giphy.cjs');
+test('personal bookmarks and themes persist without crossing accounts', async t => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'moyeo-settings-'));
+  const store = new PersonalStore(path.join(dir, 'settings.json'));
+  t.after(async () => { await fs.unlink(store.file).catch(() => {}); await fs.rmdir(dir); });
+  await Promise.all([store.update('one', 'emojiFavorites', ['❤️']), store.update('one', 'gifFavorites', ['hello'])]);
+  assert.deepEqual((await store.get('one')).emojiFavorites, ['❤️']);
+  assert.deepEqual((await store.get('one')).gifFavorites, ['hello']);
+  assert.deepEqual((await store.get('two')).emojiFavorites, []);
+  assert.throws(() => store.update('one', 'gifFavorites', ['../../escape']));
+  assert.throws(() => validateTheme({ background: 'url(file:)' }));
+});
+test('GIPHY uses server public key without forwarding Mattermost credentials', async () => {
+  const calls = [], item = { id: 'abc', title: 'Wave', images: { fixed_height: { url: 'https://media.giphy.com/media/abc/200.gif' } } };
+  const client = { mediaKey: 'session', request: async route => { assert.equal(route, '/config/client?format=old'); return { data: { EnableGifPicker: 'true', GiphySdkKey: 'public-key' } }; } };
+  const service = new GiphyService(client, async (url, options) => { calls.push({ url, options }); if (url.startsWith('https://api.')) return new Response(JSON.stringify({ data: [item], pagination: { total_count: 1 } })); return new Response('GIF89a', { headers: { 'Content-Type': 'image/gif' } }); });
+  const result = await service.search('hello'); assert.equal(result.items[0].id, 'abc');
+  assert.ok(calls[0].url.includes('api_key=public-key')); assert.equal(calls[0].options.headers, undefined);
+  assert.ok(!JSON.stringify(result).includes('public-key'));
+  assert.equal((await service.download('abc')).bytes.toString(), 'GIF89a');
+  await service.responseUrl('https://media.giphy.com/media/abc/giphy.gif');
+  assert.equal(calls.at(-1).options.headers, undefined);
+  await assert.rejects(service.responseUrl('https://127.0.0.1/private.gif'), /지원하지 않는/);
+  for (const value of ['http://media.giphy.com/a', 'https://media.giphy.com.evil.com/a', 'https://127.0.0.1/a', 'https://user:pass@media.giphy.com/a']) assert.throws(() => mediaUrl(value));
+  const disabled = new GiphyService({ request: async () => ({ data: { EnableGifPicker: 'false' } }) });
+  await assert.rejects(disabled.search(), /비활성화/);
+});

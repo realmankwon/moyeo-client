@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: moyeo-media:; media-src 'self' moyeo-media:; connect-src moyeo-assets:; worker-src 'self' blob:; font-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>모여 · Mattermost</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="media.css">
+  <link rel="stylesheet" href="messenger.css">
+  <link rel="stylesheet" href="personal.css">
+  <link rel="stylesheet" href="message-actions.css">
+  <link rel="stylesheet" href="reactions.css">
+  <link rel="stylesheet" href="incoming.css">
+  <link rel="stylesheet" href="compact.css">
+  <link rel="stylesheet" href="search.css">
+  <link rel="stylesheet" href="updates.css">
+</head>
+<body>
+  <section id="incoming-header" role="region" aria-label="새 메시지 알림" aria-live="polite" hidden></section>
+  <aside id="saved-file-notice" class="saved-file-notice" aria-label="저장한 파일" hidden></aside>
+  <div id="app"></div>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="settings-dialog" aria-labelledby="settings-title"></dialog>
+  <dialog id="people-dialog" aria-labelledby="people-title"></dialog>
+  <dialog id="library-dialog" aria-labelledby="library-title"></dialog>
+  <dialog id="viewer-dialog" aria-labelledby="viewer-title"></dialog>
+  <dialog id="custom-emoji-dialog" aria-label="사용자 이모지 추가"></dialog>
+  <dialog id="profile-dialog" aria-labelledby="profile-title"></dialog>
+  <dialog id="theme-dialog" aria-labelledby="theme-title"></dialog>
+  <dialog id="message-dialog" aria-labelledby="message-dialog-title"></dialog>
+  <dialog id="reaction-picker-dialog" aria-labelledby="reaction-picker-title"></dialog>
+  <dialog id="reaction-details-dialog" aria-labelledby="reaction-details-title"></dialog>
+  <dialog id="search-dialog" aria-labelledby="search-title"></dialog>
+  <div id="message-context-menu" class="message-context-menu" role="menu" aria-label="메시지 작업" hidden></div>
+  <script src="format.js"></script>
+  <script src="emoji-data.js"></script>
+  <script src="emoji-aliases.js"></script>
+  <script src="navigation.js"></script>
+  <script src="personal.js"></script>
+  <script src="gifs.js"></script>
+  <script src="message-actions.js"></script>
+  <script src="reactions.js"></script>
+  <script src="composer.js"></script>
+  <script src="file-types.js"></script>
+  <script src="vendor/fflate.js"></script>
+  <script src="document-preview.js"></script>
+  <script src="media.js"></script>
+  <script src="app.js"></script>
+  <script src="updates.js"></script>
+  <script src="incoming.js"></script>
+  <script src="typing.js"></script>
+  <script src="search.js"></script>
+  <script src="realtime.js"></script>
+  <script src="mentions.js"></script>
+</body>
+</html>
