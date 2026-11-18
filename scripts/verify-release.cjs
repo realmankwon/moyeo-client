@@ -60,6 +60,41 @@ async function verifyZip(file, arch) {
   assert.ok(executable && links > 5);
   return links;
 }
+async function verifyPkg(file, arch) {
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'moyeo-pkg-verify-'));
+  try {
+    const expanded = path.join(temporary, 'expanded');
+    execFileSync('pkgutil', ['--expand-full', file, expanded]);
+    const distribution = JSON.parse(execFileSync('python3', ['-c', `
+import json,sys,xml.etree.ElementTree as E
+r=E.parse(sys.argv[1]).getroot()
+print(json.dumps({'mustClose':[e.attrib['id'] for e in r.findall('./pkg-ref/must-close/app')], 'architectures':r.find('options').attrib.get('hostArchitectures'), 'domains':r.find('domains').attrib}))
+`, path.join(expanded, 'Distribution')], { encoding: 'utf8' }));
+    assert.deepEqual(distribution.mustClose, ['com.moyeo.mattermost']);
+    assert.equal(distribution.architectures, arch === 'arm64' ? 'arm64' : 'x86_64');
+    assert.equal(distribution.domains.enable_currentUserHome, 'false');
+    assert.equal(distribution.domains.enable_anywhere, 'false');
+    assert.equal(distribution.domains.enable_localSystem, 'true');
+    const component = path.join(expanded, 'com.moyeo.mattermost.pkg');
+    const packageInfo = JSON.parse(execFileSync('python3', ['-c', `
+import json,sys,xml.etree.ElementTree as E
+r=E.parse(sys.argv[1]).getroot(); print(json.dumps({'attributes':r.attrib,'upgrade':[e.attrib['id'] for e in r.findall('./upgrade-bundle/bundle')],'strict':[e.attrib['id'] for e in r.findall('./strict-identifier/bundle')]}))
+`, path.join(component, 'PackageInfo')], { encoding: 'utf8' }));
+    assert.equal(packageInfo.attributes['install-location'], '/Applications'); assert.equal(packageInfo.attributes.version, pkg.version);
+    assert.equal(packageInfo.attributes.relocatable, 'false');
+    assert.deepEqual(packageInfo.upgrade, ['com.moyeo.mattermost']); assert.deepEqual(packageInfo.strict, ['com.moyeo.mattermost']);
+    assert.deepEqual(await fs.readdir(path.join(component, 'Payload')), ['Moyeo.app']);
+    const app = path.join(component, 'Payload/Moyeo.app');
+    const executable = await fs.readFile(path.join(app, 'Contents/MacOS/Moyeo'));
+    assert.equal(executable.readUInt32LE(4), arch === 'arm64' ? 0x0100000c : 0x01000007);
+    assert.ok((await fs.stat(path.join(app, 'Contents/MacOS/Moyeo'))).mode & 0o111);
+    const count = await verifyApp(path.join(app, 'Contents/Resources/app.asar'));
+    execFileSync('codesign', ['--verify', '--deep', '--strict', app], { stdio: 'inherit' });
+    // Installer evaluates the host CPU and target volume even for a read-only query.
+    if (arch === process.arch) execFileSync('installer', ['-showChoicesXML', '-pkg', file, '-target', '/'], { stdio: 'ignore' });
+    return count;
+  } finally { await fs.rm(temporary, { recursive: true, force: true }); }
+}
 (async () => {
   if (!onlyMac) {
     const exe = await fs.readFile(path.join(output, `Moyeo-${pkg.version}-Setup-x64.exe`)); assert.equal(exe.toString('ascii', 0, 2), 'MZ');
@@ -81,6 +116,8 @@ async function verifyZip(file, arch) {
         execFileSync('codesign', ['--verify', '--deep', '--strict', app], { stdio: 'inherit' });
         execFileSync('hdiutil', ['verify', path.join(output, `Moyeo-${pkg.version}-mac-${arch}.dmg`)], { stdio: 'ignore' });
         console.log(`PASS: Mac ${arch} ZIP CRCs, architecture, executable permissions, ${links} symlinks, native signature, DMG and ${count} matching source files (execution not tested here)`);
+        const pkgCount = await verifyPkg(path.join(output, `Moyeo-${pkg.version}-mac-${arch}.pkg`), arch);
+        console.log(`PASS: Mac ${arch} PKG XML, ${arch === process.arch ? 'native Installer choices, ' : ''}must-close bundle ID, /Applications payload, architecture, signature and ${pkgCount} matching source files (actual replacement installation unverified)`);
       } finally { await fs.rm(temporary, { recursive: true, force: true }); }
     }
   }

@@ -4,7 +4,7 @@ Mattermost 서버에 연결하는 독립 Electron 클라이언트입니다. 카�
 
 ## 실행
 
-Windows는 `Moyeo-0.14.3-Setup-x64.exe` 설치형, Mac은 Apple Silicon·Intel용 DMG와 ZIP을 제공합니다(macOS 13 이상). 포터블 배포는 중단했습니다. 두 운영체제 모두 새 버전을 확인해 앱 안에 알리고, **다운로드 페이지 열기**를 누르면 GitHub 릴리스 페이지를 기본 브라우저로 엽니다. 파일 다운로드와 설치는 사용자가 직접 진행합니다. Mac은 Developer ID 없이 ad-hoc 서명으로 빌드할 수 있으며 최초 실행 시 보안 승인이 필요할 수 있습니다. 배포 설정은 [새 버전 안내](docs/updates.md)를 참고하세요.
+Windows는 `Moyeo-0.14.4-Setup-x64.exe` 설치형, Mac은 Apple Silicon·Intel용 PKG 설치 파일과 DMG·ZIP을 제공합니다(macOS 13 이상). 포터블 배포는 중단했습니다. 두 운영체제 모두 새 버전을 확인해 앱 안에 알리고, **다운로드 페이지 열기**를 누르면 GitHub 릴리스 페이지를 기본 브라우저로 엽니다. 파일 다운로드와 설치는 사용자가 직접 진행합니다. Mac은 Developer ID 없이 ad-hoc 서명으로 빌드할 수 있으며 최초 실행 시 보안 승인이 필요할 수 있습니다. 배포 설정은 [새 버전 안내](docs/updates.md)를 참고하세요.
 
 소스에서 개발할 때는 Node.js 22 이상과 npm이 필요합니다.
 
@@ -14,6 +14,10 @@ npm start
 ```
 
 서버 없이 확인하려면 로그인 화면의 **데모로 체험하기**를 선택하세요. 실제 연결은 서버 주소와 계정·비밀번호(MFA 선택), 또는 개인 액세스 토큰을 입력합니다. 주소에서 프로토콜을 생략하면 IP·localhost에는 HTTP, 도메인에는 HTTPS를 적용합니다. 서버가 다른 프로토콜을 사용하면 `http://` 또는 `https://`를 직접 입력하세요. 누락된 필드와 연결 단계, 네트워크 오류는 로그인 화면에 표시합니다. SSO 브라우저 로그인은 아직 지원하지 않습니다. API는 Mattermost 6.1 이상을 기준으로 사용하며 서버별 호환성 확인이 필요합니다.
+
+## v0.14.4 설치 개선
+
+Mac에서는 `.pkg` 설치 파일을 권장합니다. macOS 설치 프로그램이 실행 중인 Moyeo의 종료를 확인한 뒤 `/Applications/Moyeo.app`을 교체합니다. 설치가 끝나면 응용 프로그램 폴더에서 다시 실행하세요. DMG·ZIP은 직접 완전히 종료한 뒤 교체해야 합니다. 새 버전 안내의 **설치를 위해 완전히 종료** 버튼으로도 종료할 수 있습니다. 개인 설정과 로그인 정보는 유지합니다.
 
 ## v0.14.3 화면 개선
 
@@ -143,7 +147,7 @@ npm run release:preview
 npm run verify:release -- --preview
 ```
 
-`test:ui`는 Mattermost와 GIPHY 테스트 응답, 별도 임시 설정 폴더로 Electron 앱을 검사합니다. 실제 사용 서버의 GIPHY 키와 네트워크 연결은 별도 확인이 필요합니다. 기존 기능 회귀 외에 이미지 209개 모아보기의 높이·스크롤, 반응 추가·취소·사용자 목록·권한 실패·동기화, 우클릭 메뉴, 새 메시지 상단 알림·숨김·바로 이동·작성 보존을 검사합니다. OS 알림 팝업은 테스트에서 억제하고 알림 클릭의 앱 이동 경로를 검사합니다. `test:updates`는 로컬 HTTP 서버의 릴리스 응답으로 Windows와 두 Mac 아키텍처의 새 버전 탐색·다운로드 페이지 안내·응답 오류 처리를 검사합니다. 앱이 바이너리를 내려받거나 설치·재시작하지 않는지도 확인합니다. `dist:win`은 Windows 설치형, `dist:mac`은 Mac DMG·ZIP을 만듭니다. [배포 안내](docs/updates.md)를 참고하세요. 앱 내 로고 변경은 실행 중인 창과 앱 화면에 적용되며 배포 아이콘은 기본 Electron 아이콘입니다.
+`test:ui`는 Mattermost와 GIPHY 테스트 응답, 별도 임시 설정 폴더로 Electron 앱을 검사합니다. 실제 사용 서버의 GIPHY 키와 네트워크 연결은 별도 확인이 필요합니다. 기존 기능 회귀 외에 이미지 209개 모아보기의 높이·스크롤, 반응 추가·취소·사용자 목록·권한 실패·동기화, 우클릭 메뉴, 새 메시지 상단 알림·숨김·바로 이동·작성 보존을 검사합니다. OS 알림 팝업은 테스트에서 억제하고 알림 클릭의 앱 이동 경로를 검사합니다. `test:updates`는 로컬 HTTP 서버의 릴리스 응답으로 Windows와 두 Mac 아키텍처의 새 버전 탐색·다운로드 페이지 안내·응답 오류 처리를 검사합니다. 앱이 바이너리를 내려받거나 설치·재시작하지 않는지도 확인합니다. `dist:win`은 Windows 설치형, `dist:mac`은 Mac PKG·DMG·ZIP을 만듭니다. [배포 안내](docs/updates.md)를 참고하세요. 앱 내 로고 변경은 실행 중인 창과 앱 화면에 적용되며 배포 아이콘은 기본 Electron 아이콘입니다.
 
 API 참고: [Mattermost API](https://docs.mattermost.com/api), [채널 조회](https://docs.mattermost.com/api/reference/get-channels-for-user), [Electron 보안](https://www.electronjs.org/docs/latest/tutorial/security).
 
@@ -152,7 +156,7 @@ API 참고: [Mattermost API](https://docs.mattermost.com/api), [채널 조회](h
 
 ## Windows와 Mac 동시 배포 및 새 버전 안내
 
-Windows NSIS 설치형과 macOS arm64·x64 DMG/ZIP을 같은 버전·소스로 만듭니다. Mac 앱과 중첩 코드는 ad-hoc 서명하고 네이티브 서명을 검증합니다. Developer ID·Apple 공증은 기본 구성에서 사용하지 않으며 최초 실행 허용이 필요할 수 있습니다. Windows 실행·설치 검증은 Windows에서 별도로 해야 합니다.
+Windows NSIS 설치형과 macOS arm64·x64 PKG/DMG/ZIP을 같은 버전·소스로 만듭니다. Mac 앱과 중첩 코드는 ad-hoc 서명하고 네이티브 서명을 검증합니다. Developer ID·Apple 공증은 기본 구성에서 사용하지 않으며 최초 실행 허용이 필요할 수 있습니다. Windows 실행·설치 검증은 Windows에서 별도로 해야 합니다.
 
 GitHub 조회 대상은 `package.json`의 `releaseRepository`이며 기본값은 `realmankwon/moyeo-client`입니다. `MOYEO_UPDATE_REPOSITORY=owner/repo` 환경 변수로 빌드 시 변경할 수 있습니다. 공개 릴리스만 읽으며 GitHub 토큰·Mattermost 서버 주소·로그인 정보·대화를 전송하지 않습니다. 앱은 실행 약 10초 뒤와 4시간마다 확인합니다. 새 정식 버전의 해당 운영체제·아키텍처 설치 파일이 준비되면 알림을 표시합니다. 알림을 누르면 기본 브라우저에서 릴리스 페이지를 열며, 사용자가 내려받아 직접 설치합니다. 자동 다운로드·설치·재시작은 하지 않습니다.
 

@@ -1,12 +1,12 @@
 # 새 버전 알림과 수동 다운로드
 
-0.14.3은 Windows NSIS 설치형과 Mac Apple Silicon·Intel DMG/ZIP을 제공합니다. 두 운영체제 모두 새 버전을 알려주고 다운로드 페이지를 여는 방식입니다. 자동으로 앱 파일을 내려받거나 교체·설치·재시작하지 않습니다. 포터블 배포는 중단했습니다.
+0.14.4는 Windows NSIS 설치형과 Mac Apple Silicon·Intel PKG/DMG/ZIP을 제공합니다. 두 운영체제 모두 새 버전을 알려주고 다운로드 페이지를 여는 방식입니다. 자동으로 앱 파일을 내려받거나 교체·설치·재시작하지 않습니다. 포터블 배포는 중단했습니다.
 
 ## 사용자 흐름
 
 앱 실행 약 10초 뒤와 4시간마다 GitHub의 최신 정식 릴리스를 확인합니다. 설정의 **새 버전 안내 → 새 버전 확인**에서도 요청할 수 있습니다. 현재보다 높은 버전이고 해당 운영체제·CPU용 설치 파일이 업로드된 경우 로그인 화면과 채팅 화면 상단에 알림을 표시합니다.
 
-**다운로드 페이지 열기**를 누르면 기본 브라우저에서 해당 GitHub 릴리스 페이지를 엽니다. Windows는 설치 EXE, Mac은 자신의 CPU용 DMG 또는 ZIP을 선택해 내려받고 직접 설치하세요. 설치 전 앱을 트레이/메뉴 막대에서 완전히 종료합니다. 앱 안에서는 설치 명령을 실행하거나 재시작을 요청하지 않습니다. 작성 중인 메시지도 알림 때문에 사라지지 않습니다.
+**다운로드 페이지 열기**를 누르면 기본 브라우저에서 해당 GitHub 릴리스 페이지를 엽니다. Windows는 설치 EXE, Mac은 자신의 CPU용 PKG(권장), DMG 또는 ZIP을 선택해 내려받고 직접 설치하세요. PKG는 설치 과정에서 실행 중인 앱의 종료를 확인합니다. DMG·ZIP으로 복사할 때는 트레이/메뉴 막대에서 앱을 완전히 종료합니다. 앱 안에서는 설치 명령을 실행하거나 재시작을 요청하지 않습니다. 작성 중인 메시지도 알림 때문에 사라지지 않습니다.
 
 ## GitHub 저장소 설정
 
@@ -39,8 +39,8 @@ npm run verify:release
 각 플랫폼만 만들 때는 `npm run dist:win`, `npm run dist:mac`을 사용합니다. 출력은 `dist/release`입니다.
 
 - `Moyeo-VERSION-Setup-x64.exe`
-- `Moyeo-VERSION-mac-arm64.dmg`, `.zip`
-- `Moyeo-VERSION-mac-x64.dmg`, `.zip`
+- `Moyeo-VERSION-mac-arm64.pkg` (권장), `.dmg`, `.zip`
+- `Moyeo-VERSION-mac-x64.pkg` (권장), `.dmg`, `.zip`
 
 `npm run release:preview`는 `dist/preview`에 새 버전 확인을 비활성화한 테스트 패키지를 생성합니다. 검증할 때는 `npm run verify:release -- --preview`를 사용합니다.
 
@@ -58,13 +58,19 @@ Mac은 기본적으로 앱과 중첩 코드를 ad-hoc 서명합니다. **새 버
 
 `.github/workflows/release-build.yml`은 수동 실행으로 Windows·Mac 빌드 및 검증 후 Actions artifacts에 파일을 보관합니다. `production`은 버전 조회를 활성화하고 `preview`는 비활성화합니다. 저장소 변수 `MOYEO_UPDATE_REPOSITORY`가 비어 있으면 위 기본 저장소를 사용합니다. Mac 서명 인증서와 공증은 기본 빌드에 요구하지 않습니다. 이 워크플로는 공개 게시를 하지 않습니다.
 
+## 설치 중 실행 중인 앱 처리
+
+Mac은 `.pkg` 설치 파일을 권장합니다. Apple Installer의 [`must-close` 규칙](https://developer.apple.com/library/archive/documentation/DeveloperTools/Reference/DistributionDefinitionRef/Chapters/Distribution_XML_Ref.html)을 통해 `com.moyeo.mattermost` 종료를 확인한 뒤 `/Applications/Moyeo.app`을 교체합니다. 설치 후에는 앱을 직접 다시 실행합니다. PKG는 Developer ID Installer 서명과 공증이 없으므로 macOS 보안 승인이 필요할 수 있습니다.
+
+DMG·ZIP을 사용하는 경우에는 앱을 완전히 종료한 뒤 복사하세요. 창을 닫는 동작은 앱을 숨기므로 교체 전에 메뉴 막대·트레이의 **완전히 종료** 또는 새 버전 안내의 **설치를 위해 완전히 종료**를 사용합니다. 종료 버튼은 확인 대화상자에 동의했을 때만 종료하며, 다운로드 페이지를 여는 동작만으로 앱을 종료하지 않습니다. Windows는 NSIS 설치 파일로 교체합니다.
+
 ## 데이터 유지와 이전 버전
 
 Windows 데이터는 `%APPDATA%/moyeo-mattermost-client`, Mac 데이터는 `~/Library/Application Support/moyeo-mattermost-client`에 보관합니다. 설치 파일을 교체해도 이 경로를 유지하며 Windows 제거 프로그램은 사용자 데이터를 삭제하지 않도록 설정했습니다.
 
 이전 포터블 사용자는 로그인 전 **화면 및 브랜드 설정 → 이전 포터블 데이터 가져오기**에서 기존 EXE 옆 `Data`를 선택합니다. 설정 JSON과 암호화된 `login.bin`만 가져오고 현재 파일은 덮어쓰지 않습니다. 로그인 정보는 같은 OS 사용자 계정에서만 복원할 수 있습니다. 캐시·실행 파일은 복사하지 않습니다. 로그인 기억 기능의 Keychain 사용은 버전 알림 기능과 별개입니다.
 
-이전에 배포한 0.13.x와 테스트용 0.14.0에는 이 알림 기능이 없거나 꺼져 있으므로 0.14.3로 최초 한 번 수동 교체해야 합니다.
+이전에 배포한 0.13.x와 테스트용 0.14.0에는 이 알림 기능이 없거나 꺼져 있으므로 0.14.4로 최초 한 번 수동 교체해야 합니다.
 
 ## 테스트 범위
 
@@ -72,4 +78,4 @@ Windows 데이터는 `%APPDATA%/moyeo-mattermost-client`, Mac 데이터는 `~/Li
 - `npm run test:updates`: 로컬 실제 HTTP 응답으로 버전 조회·기본 브라우저 전달·오류 처리를 검증합니다. 바이너리 다운로드나 설치는 수행하지 않습니다.
 - `MOYEO_EXECUTABLE=/path/to/Moyeo.app/Contents/MacOS/Moyeo node tests/updates-ui.cjs`: 실제 패키지의 조회 서비스와 IPC·알림·다운로드 안내·레이아웃·휠·방향키를 검증합니다. 네트워크 응답과 브라우저 열기만 테스트 대체 구현을 사용합니다.
 - `npm run test:ui`: 메신저 기능 회귀입니다. 암호화 저장소와 활성 창 판정은 테스트 대체 구현이며 실제 Keychain·DPAPI·OS 포커스 검증을 대신하지 않습니다.
-- `npm run verify:release`: 소스·알림 모드·사용자 데이터 제외·Windows 런타임 CPU·Mac ZIP 무결성·실행 권한·심볼릭 링크·CPU·네이티브 서명·DMG를 검사합니다. Windows 실행과 Apple Silicon 실행을 검사 없이 수행했다고 주장하지 않습니다.
+- `npm run verify:release`: 소스·알림 모드·사용자 데이터 제외·Windows 런타임 CPU·Mac ZIP 무결성·실행 권한·심볼릭 링크·CPU·네이티브 서명·DMG·PKG의 종료 대상과 설치 경로 및 페이로드를 검사합니다. Windows 실행과 Apple Silicon 실행을 검사 없이 수행했다고 주장하지 않습니다.

@@ -23,6 +23,7 @@ api.importLegacyData = () => ipcRenderer.invoke('settings:importLegacy');
 api.getUpdateState = () => ipcRenderer.invoke('updates:state');
 api.checkForUpdates = () => ipcRenderer.invoke('updates:check');
 api.openUpdateDownload = () => ipcRenderer.invoke('updates:openDownload');
+api.quitForUpdateInstall = () => ipcRenderer.invoke('updates:quitForInstall');
 api.onUpdateState = listener => { const handler = (_event, value) => listener(value); ipcRenderer.on('updates:state', handler); return () => ipcRenderer.removeListener('updates:state', handler); };
 for (const name of ['chooseAttachments', 'stageAttachment', 'discardAttachment', 'uploadAttachment', 'emojiList', 'createEmoji', 'getEmojiRecents', 'saveEmojiRecents', 'openLink']) api[name] = (...args) => ipcRenderer.invoke(name, ...args);
 for (const name of ['getPersonalSettings', 'savePersonalSettings', 'gifSearch', 'gifById', 'gifReload', 'stageGif', 'userProfile']) api[name] = (...args) => ipcRenderer.invoke(name, ...args);

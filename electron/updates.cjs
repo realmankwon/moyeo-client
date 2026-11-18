@@ -46,7 +46,7 @@ class UpdateService extends EventEmitter {
       if (!next || release.draft !== false || release.prerelease !== false || semver.prerelease(next)) throw Error('Invalid stable release');
       this.downloadPage = null;
       if (!semver.gt(next, this.state.version)) { this.change({ phase: 'current', nextVersion: '' }); return; }
-      const names = this.platform === 'win32' ? [`Moyeo-${next}-Setup-x64.exe`] : [`Moyeo-${next}-mac-${this.arch}.dmg`, `Moyeo-${next}-mac-${this.arch}.zip`];
+      const names = this.platform === 'win32' ? [`Moyeo-${next}-Setup-x64.exe`] : ['pkg', 'dmg', 'zip'].map(ext => `Moyeo-${next}-mac-${this.arch}.${ext}`);
       const ready = Array.isArray(release.assets) && release.assets.some(asset => names.includes(asset.name) && asset.state === 'uploaded');
       if (!ready) { this.change({ phase: 'pending', nextVersion: next }); return; }
       this.downloadPage = `https://github.com/${this.repository}/releases/tag/${encodeURIComponent(tag)}`;

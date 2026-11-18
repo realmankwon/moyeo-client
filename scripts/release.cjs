@@ -16,6 +16,6 @@ const root = path.resolve(__dirname, '..');
   if (mac && process.env.MOYEO_MAC_SIGNED === '1') assertMacCredentials();
   for (const script of ['generate-emoji.cjs', 'generate-preview.cjs']) execFileSync(process.execPath, [path.join(__dirname, script)], { cwd: root, stdio: 'inherit' });
   if (win) await build({ projectDir: root, config: structuredClone(config), publish: 'never', targets: Platform.WINDOWS.createTarget(args.includes('--dir') ? 'dir' : 'nsis', Arch.x64) });
-  if (mac) await build({ projectDir: root, config: structuredClone(config), publish: 'never', targets: Platform.MAC.createTarget(args.includes('--dir') ? 'dir' : ['dmg', 'zip'], Arch.arm64, Arch.x64) });
+  if (mac) await build({ projectDir: root, config: structuredClone(config), publish: 'never', targets: Platform.MAC.createTarget(args.includes('--dir') ? 'dir' : ['pkg', 'dmg', 'zip'], Arch.arm64, Arch.x64) });
   console.log(preview ? 'Preview artifacts: release notifications are disabled.' : 'Installers created with new-version notifications and browser download guidance. Upload all platform artifacts before publishing the GitHub release.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

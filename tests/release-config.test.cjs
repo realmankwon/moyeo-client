@@ -8,6 +8,10 @@ test('releases use GitHub version notices and manual download without update-ins
   assert.equal(config.nsis.deleteAppDataOnUninstall, false); assert.equal(config.mac.forceCodeSigning, false);
   assert.equal(config.mac.notarize, false); assert.equal(config.mac.identity, '-');
   assert.deepEqual(config.win.target, [{ target: 'nsis', arch: ['x64'] }]);
+  assert.deepEqual(config.pkg.mustClose, ['com.moyeo.mattermost']);
+  assert.equal(config.pkg.isRelocatable, false); assert.equal(config.pkg.overwriteAction, 'upgrade');
+  assert.equal(config.pkg.allowCurrentUserHome, false); assert.equal(config.pkg.installLocation, '/Applications');
+  assert.ok(config.mac.target.some(item => item.target === 'pkg'));
   assert.equal(createConfig({ MOYEO_UPDATE_REPOSITORY: 'other/releases' }).extraMetadata.moyeoUpdates.repository, 'other/releases');
   assert.throws(() => createConfig({ MOYEO_UPDATE_REPOSITORY: 'https://github.com/owner/repo' }), /owner\/repo/);
 });

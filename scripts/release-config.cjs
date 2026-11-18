@@ -15,8 +15,15 @@ function createConfig(env = process.env, { preview = false } = {}) {
     publish: null,
     win: { target: [{ target: 'nsis', arch: ['x64'] }], artifactName: 'Moyeo-${version}-Setup-${arch}.${ext}', signAndEditExecutable: Boolean(env.WIN_CSC_LINK || process.platform === 'win32') },
     nsis: { oneClick: false, perMachine: false, allowElevation: true, allowToChangeInstallationDirectory: true, deleteAppDataOnUninstall: false, createDesktopShortcut: true, shortcutName: '모여', runAfterFinish: true, differentialPackage: false },
+    pkg: {
+      artifactName: 'Moyeo-${version}-mac-${arch}.${ext}',
+      mustClose: ['com.moyeo.mattermost'],
+      installLocation: '/Applications', allowAnywhere: false, allowCurrentUserHome: false, allowRootDirectory: true,
+      isRelocatable: false, isVersionChecked: true, hasStrictIdentifier: true, overwriteAction: 'upgrade',
+      welcome: 'installer-welcome.html', conclusion: 'installer-conclusion.html'
+    },
     mac: {
-      target: [{ target: 'dmg', arch: ['arm64', 'x64'] }, { target: 'zip', arch: ['arm64', 'x64'] }],
+      target: [{ target: 'pkg', arch: ['arm64', 'x64'] }, { target: 'dmg', arch: ['arm64', 'x64'] }, { target: 'zip', arch: ['arm64', 'x64'] }],
       artifactName: 'Moyeo-${version}-mac-${arch}.${ext}', minimumSystemVersion: '13.0',
       category: 'public.app-category.social-networking',
       hardenedRuntime: signed, notarize: signed,

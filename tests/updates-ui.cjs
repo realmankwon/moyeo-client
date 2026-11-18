@@ -16,6 +16,7 @@ const root = path.resolve(__dirname, '..');
       if (!policy?.enabled) throw Error('Use a release build with version notifications enabled');
       const original = net.fetch.bind(net);
       globalThis.__releaseRequests = []; globalThis.__downloadPages = []; globalThis.__releaseVersion = '0.15.0';
+      globalThis.__exitConfirmations = 0; globalThis.__exitResponse = 0;
       net.fetch = (url, options) => {
         if (String(url) !== `https://api.github.com/repos/${policy.repository}/releases/latest`) return original(url, options);
         globalThis.__releaseRequests.push({ url, credentials: options.credentials, headers: options.headers });
@@ -24,12 +25,23 @@ const root = path.resolve(__dirname, '..');
       };
       shell.openExternal = async url => { globalThis.__downloadPages.push(url); };
     });
+    await app.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async (_win, options) => {
+        if (options.title !== '새 버전 설치 준비') throw Error('Unexpected dialog');
+        globalThis.__exitConfirmations++;
+        return { response: globalThis.__exitResponse };
+      };
+    });
+    assert.equal(await page.evaluate(() => window.messenger.quitForUpdateInstall()), false);
     await page.locator('#login-settings').click();
     await expect(page.locator('#update-status')).toContainText(require('../package.json').version);
     await expect(page.locator('#update-action')).toBeEnabled();
     await page.locator('#update-action').click();
     await expect(page.locator('#update-banner')).toContainText('0.15.0');
-    await expect(page.locator('#update-status')).toContainText('직접 설치');
+    await expect(page.locator('#update-status')).toContainText('PKG');
+    await page.locator('#update-quit').click();
+    assert.equal(await app.evaluate(() => globalThis.__exitConfirmations), 1);
+    assert.equal(app.windows().length, 1, 'Cancel must keep the messenger running');
     await page.locator('#settings-close').click();
     await expect(page.locator('#update-banner-action')).toHaveText('다운로드 페이지 열기');
     assert.equal(await app.evaluate(() => globalThis.__downloadPages.length), 0);
@@ -60,6 +72,13 @@ const root = path.resolve(__dirname, '..');
     await page.evaluate(() => window.messenger.checkForUpdates());
     await expect(page.locator('#update-banner')).toBeHidden();
     await page.screenshot({ path: path.join(root, 'test-results/manual-download-mac-ui.png') });
-    console.log('PASS: actual release checker and IPC, new-version notification, trusted browser download page, no install/restart API, layout, wheel and arrow input (HTTP and browser opening mocked)');
+    await app.evaluate(() => { globalThis.__releaseVersion = '0.15.0'; globalThis.__exitResponse = 1; });
+    await page.evaluate(() => window.messenger.checkForUpdates());
+    await expect(page.locator('#update-banner-quit')).toBeVisible();
+    await page.screenshot({ path: path.join(root, 'test-results/install-exit-mac-ui.png') });
+    const closed = new Promise(resolve => app.once('close', resolve));
+    await page.locator('#update-banner-quit').click();
+    await closed; app = null;
+    console.log('PASS: actual release checker and IPC, version notification, trusted browser page, no install/restart API, wheel/arrow input, canceled exit keeps app running and confirmed installation exit closes process (HTTP, browser and dialog response mocked)');
   } finally { if (app) await app.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

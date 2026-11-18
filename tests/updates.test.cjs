@@ -40,6 +40,10 @@ test('matching architecture must be ready before announcing a download', async (
   const { service, opened } = fixture({ request: async () => Response.json(release('0.15.0', ['mac-x64.dmg'])) });
   await service.check(); assert.equal(service.snapshot().phase, 'pending'); await service.openDownload(); assert.equal(opened.length, 0);
 });
+test('Mac PKG-only releases can be announced for the matching architecture', async () => {
+  const { service } = fixture({ request: async () => Response.json(release('0.15.0', ['mac-arm64.pkg'])) });
+  await service.check(); assert.equal(service.snapshot().phase, 'available');
+});
 test('semantic version comparison excludes current, older, draft and prerelease versions', async () => {
   for (const version of ['0.14.0', '0.14.1']) {
     const { service } = fixture({ request: async () => Response.json(release(version)) });

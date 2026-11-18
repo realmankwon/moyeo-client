@@ -17,6 +17,7 @@ const { ConsoleService } = require('./console.cjs');
 const { ChatWindows } = require('./chat-windows.cjs');
 const { UpdateService } = require('./updates.cjs');
 const { importLegacyData } = require('./migrate-data.cjs');
+const { quitForInstall } = require('./install-exit.cjs');
 // Keep the existing app-data path and macOS encryption identity across installer builds.
 app.setName('moyeo-mattermost-client');
 if (!app.commandLine.hasSwitch('user-data-dir')) {
@@ -70,6 +71,10 @@ if (singleInstance) app.whenReady().then(() => {
   handle('updates:state', () => updates.snapshot());
   handle('updates:check', () => mainOnly(() => updates.check()));
   handle('updates:openDownload', () => mainOnly(() => updates.openDownload()));
+  handle('updates:quitForInstall', () => mainOnly(() => {
+    if (updates.snapshot().phase !== 'available') return false;
+    return quitForInstall({ app, dialog, win });
+  }));
   updates.on('change', value => chatWindows.broadcast('updates:state', value));
   updates.start();
   handle('settings:importLegacy', () => mainOnly(async () => {
