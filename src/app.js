@@ -39,7 +39,9 @@ function directUserId(channel) { return (channel.name || '').split('__').find(id
 function conversationAvatar(channel, small = false) {
   if (channel.type === 'D') return accountAvatar(directUserId(channel), small);
   const label = channel.type === 'G' ? '그룹 대화' : channel.type === 'P' ? '비공개 채널' : '공개 채널';
-  return `<span class="avatar channel-avatar channel-type-${esc(String(channel.type || 'O').toLowerCase())}${small ? ' small' : ''}" title="${label}" aria-hidden="true">${icon(channel.type === 'G' ? 'people' : channel.type === 'P' ? 'lock' : 'hash')}</span>`;
+  const name = channelName(channel), initial = [...name.replace(/^[#@\s]+/, '')][0] || '#';
+  const tone = [...String(channel.id || name)].reduce((sum, letter) => sum * 31 + letter.codePointAt(0) >>> 0, 0) % 6;
+  return `<span class="avatar channel-avatar channel-tone-${tone} channel-type-${esc(String(channel.type || 'O').toLowerCase())}${small ? ' small' : ''}" title="${esc(name)} · ${label}" aria-hidden="true"><span class="channel-monogram">${esc(initial.toLocaleUpperCase())}</span><span class="channel-type-badge">${icon(channel.type === 'G' ? 'people' : channel.type === 'P' ? 'lock' : 'hash')}</span></span>`;
 }
 document.addEventListener('error', event => { if (event.target.matches?.('img[data-avatar]')) event.target.remove(); }, true);
 const clock = value => value ? new Date(value).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -232,10 +234,10 @@ function renderChannelList() {
     const rawPreview = RichText.preview(state.previews[c.id] || c.header || '');
     const preview = /^(?:비공개 채널|공개 채널|그룹 대화|개인 DM)$/.test(rawPreview) ? '' : rawPreview;
     const kind = c.type === 'P' ? '비공개 채널' : c.type === 'O' ? '공개 채널' : c.type === 'G' ? '그룹 대화' : '개인 DM';
-    const context = account ? `@${account.username}` : showTeam && teamLabel ? teamLabel : !preview ? kind : '';
+    const context = account && !preview ? `@${account.username}` : showTeam && teamLabel ? teamLabel : '';
     const date = new Date(c.last_post_at), validDate = c.last_post_at && Number.isFinite(date.getTime());
     const time = validDate ? date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
-    return `<div class="conversation-row ${state.selected === c.id ? 'is-selected' : ''} ${state.unread[c.id] ? 'has-unread' : ''}"><button class="chat-row ${state.selected === c.id ? 'selected' : ''}" data-channel="${esc(c.id)}" aria-pressed="${state.selected === c.id}">${conversationAvatar(c)}<span class="summary"><span class="row-title" title="${esc(name)}">${esc(name)}</span>${context ? `<span class="account-handle">${esc(context)}</span>` : ''}${preview ? `<span class="row-preview">${esc(preview)}</span>` : ''}</span><span class="row-meta"><time class="row-time" ${validDate ? `datetime="${date.toISOString()}" title="${esc(date.toLocaleString('ko-KR'))}"` : ''}>${time}</time>${state.unread[c.id] ? `<span class="badge">${esc(state.unread[c.id])}</span>` : ''}</span></button>${favoriteButton(c)}</div>`;
+    return `<div class="conversation-row ${state.selected === c.id ? 'is-selected' : ''} ${state.unread[c.id] ? 'has-unread' : ''}"><button class="chat-row ${state.selected === c.id ? 'selected' : ''}" data-channel="${esc(c.id)}" aria-pressed="${state.selected === c.id}" aria-description="${kind}">${conversationAvatar(c)}<span class="summary"><span class="row-heading"><span class="row-title" title="${esc(name)}">${esc(name)}</span><time class="row-time" ${validDate ? `datetime="${date.toISOString()}" title="${esc(date.toLocaleString('ko-KR'))}"` : ''}>${time}</time></span>${context || preview || state.unread[c.id] ? `<span class="row-detail">${context ? `<span class="row-context ${account ? 'is-account' : ''}" title="${esc(context)}">${esc(context)}</span>` : ''}${preview ? `<span class="row-preview" title="${esc(preview)}">${esc(preview)}</span>` : ''}${state.unread[c.id] ? `<span class="badge">${esc(state.unread[c.id])}</span>` : ''}</span>` : ''}</span></button>${favoriteButton(c)}</div>`;
   };
   const sections = [];
   const append = (label, items, key) => {
@@ -254,7 +256,7 @@ function renderChannelList() {
   list.setAttribute('tabindex', '0'); list.setAttribute('role', 'region'); list.setAttribute('aria-label', '대화 목록');
   document.querySelectorAll('[data-channel]').forEach(button => button.onclick = () => selectChannel(button.dataset.channel));
   bindFavorites();
-  list.scrollTop = oldTop;
+  list.scrollTo({ top: oldTop, behavior: 'instant' });
   if (focusKey) list.querySelector(`[data-${focusKey[0]}="${CSS.escape(focusKey[1])}"]`)?.focus({ preventScroll: true });
 }
 async function selectChannel(id) {
