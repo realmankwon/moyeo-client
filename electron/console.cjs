@@ -1,4 +1,6 @@
 const {randomUUID}=require('node:crypto');
+const consoleSections=Object.freeze({home:'/admin_console',users:'/admin_console/user_management/users',channels:'/admin_console/user_management/channels',storage:'/admin_console/environment/file_storage',smtp:'/admin_console/environment/smtp',teams:'/admin_console/user_management/teams',permissions:'/admin_console/user_management/permissions/',logs:'/admin_console/reporting/server_logs',license:'/admin_console/about/license',web:'/admin_console/environment/web_server'});
+function consolePath(section='home'){if(typeof section!=='string'||!Object.hasOwn(consoleSections,section))throw Error('서버 관리 메뉴를 확인해 주세요.');return consoleSections[section];}
 function hasConsolePermission(roles,permissions=[]) { return roles.includes('system_admin') || permissions.some(permission=>permission==='manage_system'||/^sysconsole_(read|write)_/.test(permission)); }
 class ConsoleService {
  constructor(electron,client,options={}){this.e=electron;this.client=client;this.options=options;this.window=null;this.consoleSession=null;this.serial=0;this.opening=null;}
@@ -7,16 +9,17 @@ class ConsoleService {
   const epoch=this.client.mediaKey,user=(await this.client.request('/users/me')).data;
   if(epoch!==this.client.mediaKey||user.id!==this.client.me?.id)throw Error('계정이 변경되었습니다. 다시 열어 주세요.');
   const roles=String(user.roles||'').split(/\s+/).filter(Boolean);let permissions=[];
-  if(!roles.includes('system_admin')&&roles.some(role=>!['system_user','system_guest'].includes(role))){const result=(await this.client.request('/roles/names',{method:'POST',body:roles})).data;permissions=result.flatMap(role=>role.permissions||[]);}
+  if(!this.options.requireSystemAdmin&&!roles.includes('system_admin')&&roles.some(role=>!['system_user','system_guest'].includes(role))){const result=(await this.client.request('/roles/names',{method:'POST',body:roles})).data;permissions=result.flatMap(role=>role.permissions||[]);}
   if(epoch!==this.client.mediaKey)throw Error('계정이 변경되었습니다. 다시 열어 주세요.');
-  const available=hasConsolePermission(roles,permissions);if(!available&&this.window)this.close();
+  const available=this.options.requireSystemAdmin?roles.includes('system_admin'):hasConsolePermission(roles,permissions);if(!available&&this.window)this.close();
   return {available,roles};
  }
- async open(){if(this.opening)return this.opening;const task=this.createWindow();this.opening=task;try{return await task;}finally{if(this.opening===task)this.opening=null;}}
- async createWindow(){
+ async open(section='home'){consolePath(section);if(this.opening){await this.opening;return this.open(section);}const task=this.createWindow(section);this.opening=task;try{return await task;}finally{if(this.opening===task)this.opening=null;}}
+ async createWindow(section){
+  const route=consolePath(section);
   const epoch=this.client.mediaKey,serial=this.serial;if(!(await this.access()).available)throw Error('현재 계정에는 System Console 접근 권한이 없습니다.');
   if(epoch!==this.client.mediaKey)throw Error('계정이 변경되었습니다. 다시 열어 주세요.');
-  if(this.window&&!this.window.isDestroyed()){this.window.show();this.window.focus();return;}
+  if(this.window&&!this.window.isDestroyed()){const existing=this.window;if(existing.webContents.getURL()!==this.client.server+route)await existing.loadURL(this.client.server+route);if(serial!==this.serial||epoch!==this.client.mediaKey||existing.isDestroyed())return;existing.show();existing.focus();return;}
   const server=new URL(this.client.server),base=server.pathname.replace(/\/$/,''),cookiePath=base?base+'/':'/',token=this.client.token;
   const session=this.e.session.fromPartition('moyeo-console-'+randomUUID(),{cache:false});this.consoleSession=session;
   const trusted=address=>{try{const url=new URL(address);return url.origin===server.origin&&(url.pathname===base||url.pathname.startsWith(base+'/'));}catch{return false;}};
@@ -49,9 +52,9 @@ class ConsoleService {
   win.webContents.on('will-attach-webview',event=>event.preventDefault());
   win.on('closed',()=>{if(this.window===win){this.window=null;this.serial++;}if(this.consoleSession===session)this.consoleSession=null;session.closeAllConnections().catch(()=>{});session.clearStorageData().catch(()=>{});session.clearCache().catch(()=>{});});
   win.once('ready-to-show',()=>{if(current())win.show();else win.destroy();});
-  try{await win.loadURL(this.client.server+'/admin_console');if(!current()){win.destroy();return;}win.show();}
+  try{await win.loadURL(this.client.server+route);if(!current()){win.destroy();return;}win.show();}
   catch(error){if(!win.isDestroyed())win.destroy();throw new Error('System Console을 불러오지 못했습니다. 서버의 웹 화면 제공 여부와 네트워크를 확인해 주세요.');}
  }
  close(){this.serial++;if(this.window&&!this.window.isDestroyed())this.window.destroy();this.window=null;}
 }
-module.exports={ConsoleService,hasConsolePermission};
+module.exports={ConsoleService,hasConsolePermission,consolePath};

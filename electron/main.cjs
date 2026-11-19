@@ -18,6 +18,7 @@ const { ChatWindows } = require('./chat-windows.cjs');
 const { UpdateService } = require('./updates.cjs');
 const { importLegacyData } = require('./migrate-data.cjs');
 const { quitForInstall } = require('./install-exit.cjs');
+const { AccountService } = require('./account.cjs');
 // Keep the existing app-data path and macOS encryption identity across installer builds.
 app.setName('moyeo-mattermost-client');
 if (!app.commandLine.hasSwitch('user-data-dir')) {
@@ -88,9 +89,15 @@ if (singleInstance) app.whenReady().then(() => {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   const typing = new TypingService(client,data=>chatWindows.broadcast('chat:typing',data),WebSocket,event=>chatWindows.broadcast('chat:realtime',event));
   handle('getRealtimeStatus',()=>({connected:typing.connected}));
-  const systemConsole = new ConsoleService(electron,client,{onLogout:()=>{if(!win.isDestroyed())win.webContents.send('account:logout');}});
+  const systemConsole = new ConsoleService(electron,client,{requireSystemAdmin:true,onLogout:()=>{if(!win.isDestroyed())win.webContents.send('account:logout');}});
   handle('getConsoleAccess',()=>systemConsole.access());
-  handle('openSystemConsole',()=>systemConsole.open());
+  handle('openSystemConsole',section=>systemConsole.open(section));
+  const accountService=new AccountService(client);
+  handle('accountProfile',()=>accountService.profile());
+  handle('saveAccountProfile',async values=>{const user=await accountService.save(values);chatWindows.broadcast('account:profile-updated',user);return user;});
+  handle('changeAccountPassword',(currentPassword,newPassword)=>accountService.password(currentPassword,newPassword));
+  handle('pinnedPosts',channel=>client.request('/channels/'+require('./client.cjs').validId(channel)+'/pinned').then(result=>result.data));
+  handle('setPostPin',async(id,pinned)=>{if(typeof pinned!=='boolean')throw Error('핀 상태를 확인해 주세요.');const epoch=client.mediaKey;require('./client.cjs').validId(id);await client.request('/posts/'+id+(pinned?'/pin':'/unpin'),{method:'POST'});if(epoch!==client.mediaKey)throw Error('계정이 변경되었습니다.');const post=await client.post(id);if(epoch!==client.mediaKey)throw Error('계정이 변경되었습니다.');chatWindows.broadcast('chat:realtime',{type:'post_edited',post});return post;});
   app.on('before-quit',()=>systemConsole.close());
   app.on('before-quit', () => typing.stop());
   handle('sendTyping', (channel,parent) => typing.send(channel,parent));
