@@ -14,11 +14,18 @@ const messageNavigation = (() => {
     const timer=setTimeout(stop,10000);area.addEventListener('wheel',stop,{passive:true});area.addEventListener('pointerdown',stop,{passive:true});area.addEventListener('touchstart',stop,{passive:true});area.addEventListener('keydown',stop);
     cancelRestore=stop;
   }
-  async function open(address) {
+  async function open(address, postId = '') {
     const current=++ticket,epoch=state.generation,sourceChannel=state.selected;
-    const context=state.me&&!state.demo?await api.resolvePostLink(address):null;
+    let context = null;
+    if (state.me && state.demo && postId) {
+      const channel = state.channels.find(item => state.demoPosts[item.id]?.some(post => post.id === postId && !post.delete_at));
+      const posts = channel && state.demoPosts[channel.id];
+      if (posts) context = { channel, posts: [...posts], post: posts.find(post => post.id === postId) };
+    } else if (state.me && !state.demo) {
+      context = await api.resolvePostLink(postId ? await api.postLink(postId) : address);
+    }
     if(current!==ticket||epoch!==state.generation||sourceChannel!==state.selected)return;
-    if(!context)return api.openLink(address);
+    if (!context) { if (postId) throw new Error('원본 메시지가 삭제되었거나 접근할 수 없습니다.'); return api.openLink(address); }
     await hydrateUsers(context.posts.map(post=>post.user_id));
     if(current!==ticket||epoch!==state.generation||sourceChannel!==state.selected)return;
     cancelRestore();if(state.selected&&$('#messages')){history.push(snapshot());if(history.length>20)history.shift();}
@@ -45,5 +52,5 @@ const messageNavigation = (() => {
   }
   function reset(){ticket++;history=[];cancelRestore();paint();}
   document.addEventListener('keydown',event=>{if(event.altKey&&event.key==='ArrowLeft'&&history.length){event.preventDefault();back();}});
-  return {open,paint,back,reset};
+  return {open,openPost:id=>open(null,id),paint,back,reset};
 })();

@@ -12,6 +12,7 @@ const { isText, ext, previewType, canOpen } = require('../src/file-types.js');
 function registerFiles(client, handle, getWindow, giphy) {
   const icons=new FileIcons(app);
   const savedFiles=new Map();
+  handle('copyFileImage',id=>require('./image-clipboard.cjs').copyFileImage(client,id,require('electron')));
   protocol.handle('moyeo-assets',request=>{
     const url=new URL(request.url);
     if(url.hostname!=='local'||url.search||request.method!=='GET'||!/^\/pdfjs\/(cmaps|standard_fonts|wasm)\/[a-zA-Z0-9_.-]+$/.test(url.pathname))return new Response(null,{status:403});

@@ -19,6 +19,7 @@ const { UpdateService } = require('./updates.cjs');
 const { importLegacyData } = require('./migrate-data.cjs');
 const { quitForInstall } = require('./install-exit.cjs');
 const { AccountService } = require('./account.cjs');
+const { AdminService } = require('./admin.cjs');
 const { configureNotifications } = require('./notifications.cjs');
 // Keep the existing app-data path and macOS encryption identity across installer builds.
 app.setName('moyeo-mattermost-client');
@@ -96,6 +97,8 @@ if (singleInstance) app.whenReady().then(async () => {
   const systemConsole = new ConsoleService(electron,client,{requireSystemAdmin:true,onLogout:()=>{if(!win.isDestroyed())win.webContents.send('account:logout');}});
   handle('getConsoleAccess',()=>systemConsole.access());
   handle('openSystemConsole',section=>systemConsole.open(section));
+  const adminService=new AdminService(client);
+  handle('admin',(action,params)=>{if(chatWindows.actor()?.floating)throw Error('서버 관리는 메인 창에서 열어 주세요.');return adminService.run(action,params);});
   const accountService=new AccountService(client);
   handle('accountProfile',()=>accountService.profile());
   handle('saveAccountProfile',async values=>{const user=await accountService.save(values);chatWindows.broadcast('account:profile-updated',user);return user;});

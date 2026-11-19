@@ -19,7 +19,7 @@ let app, server, websocket, fixtureEvents;
   const fileMeta = {};
   const mediaRequests = [];
   const assetPosts = [], reactionRows = new Map(), remotePosts = new Map();
-  let failReaction = false;
+  let failReaction = false, denyOriginal = false;
   const now = Date.now();
   const uploads = [], favoritePrefs = { [me]: { [room2]: true }, [second]: {} };
   let failFavorite = false, failPost = false;
@@ -111,6 +111,7 @@ let app, server, websocket, fixtureEvents;
     const postMatch = /^\/api\/v4\/posts\/([a-z0-9]{26})(\/(patch|thread))?$/.exec(req.url);
     if (postMatch) {
       const post = fixturePosts.find(item => item.id === postMatch[1]);
+      if (denyOriginal && post?.id === fixturePosts[0].id) { res.statusCode = 403; return res.end('{"message":"원본 메시지에 접근할 수 없습니다."}'); }
       if (!post) { res.statusCode = 404; return res.end('{"message":"not found"}'); }
       if (postMatch[3] === 'thread') { const posts = fixturePosts.filter(p => !p.delete_at && (p.id === post.id || p.root_id === post.id)); result = { posts: Object.fromEntries(posts.map(p => [p.id,p])), order: posts.map(p => p.id) }; }
       else if (req.method === 'DELETE') { post.delete_at = Date.now(); result = { status: 'OK' }; }
@@ -234,6 +235,29 @@ let app, server, websocket, fixtureEvents;
   await expect(page.locator(`[data-message-id="${oldReply}"] .reply-reference`)).toContainText('이전 메시지 1');
   await expect(page.locator(`[data-message-id="${oldReply}"] .reply-reference`)).toContainText('팀원님의 메시지');
   await expect(page.locator(`[data-message-id="${missingReply}"] .reply-reference`)).toContainText('접근할 수 없습니다');
+  // The quoted root is outside the loaded page; clicking must load it in-app and preserve the reply position/draft.
+  await expect(page.locator('[data-message-id="'+missingReply+'"] .reply-reference-jump')).toHaveCount(0);
+  await expect(page.locator('[data-message-id="'+fixturePosts[0].id+'"]')).toHaveCount(0);
+  await app.evaluate(({shell})=>{globalThis.__replyOpenedLinks=[];shell.openExternal=async address=>globalThis.__replyOpenedLinks.push(address);});
+  const originalButton=page.locator('[data-message-id="'+oldReply+'"] .reply-reference-jump');
+  await originalButton.scrollIntoViewIfNeeded();
+  await page.locator('#message-input').fill('원문 이동 전 작성 중인 답장');
+  const replyVisual=await originalButton.evaluate(element=>element.closest('[data-message-id]').getBoundingClientRect().top-document.querySelector('#messages').getBoundingClientRect().top);
+  await originalButton.click();
+  await expect(page.locator('.message-target')).toHaveAttribute('data-message-id',fixturePosts[0].id);
+  await expect(page.locator('.message-target')).toBeInViewport();
+  assert.deepEqual(await app.evaluate(()=>globalThis.__replyOpenedLinks),[]);
+  await page.locator('#message-back').click();
+  await expect.poll(()=>originalButton.evaluate(element=>element.closest('[data-message-id]').getBoundingClientRect().top-document.querySelector('#messages').getBoundingClientRect().top)).toBeCloseTo(replyVisual,0);
+  await expect(page.locator('#message-input')).toHaveValue('원문 이동 전 작성 중인 답장');
+  await expect(page.locator('#message-back')).toHaveCount(0);
+  denyOriginal=true;
+  await originalButton.click();
+  await expect(page.locator('#toast')).toContainText('원본 메시지에 접근할 수 없습니다.');
+  await expect(page.locator('#message-back')).toHaveCount(0);
+  await expect(originalButton).toBeVisible();
+  denyOriginal=false;
+  await page.locator('#message-input').fill('');
   await expect(page.locator('#load-more')).toHaveCount(0);
   const historyAnchor=await page.locator('#messages').evaluate(area=>{area.scrollTop=0;const message=area.querySelector('.message .bubble');return {id:message.closest('[data-message-id]').dataset.messageId,offset:message.getBoundingClientRect().top-area.getBoundingClientRect().top};});
   await expect(page.locator(`[data-message-id="${fixturePosts[0].id}"]`)).toHaveCount(1);
@@ -369,9 +393,20 @@ let app, server, websocket, fixtureEvents;
   await page.locator(`[data-open-file="${fileIds.image}"]`).click();
   await expect(page.locator('#viewer-title')).toHaveText('photo.png');
   await expect.poll(() => page.locator('.viewer-image').evaluate(img => img.naturalWidth)).toBeGreaterThan(0);
+  await page.locator('#viewer-copy').click();
+  await expect(page.locator('#viewer-status')).toContainText('클립보드에 복사');
+  const copiedImage=await app.evaluate(async({clipboard,nativeImage})=>{const item=(await clipboard.read()).find(item=>item.types.includes('image/png'));if(!item)return null;const bytes=Buffer.from(await(await item.getType('image/png')).arrayBuffer()),image=nativeImage.createFromBuffer(bytes);return {size:image.getSize(),pixels:image.toBitmap().toString('base64')};});
+  const expectedImage=await app.evaluate(({nativeImage},encoded)=>{const image=nativeImage.createFromBuffer(Buffer.from(encoded,'base64'));return {size:image.getSize(),pixels:image.toBitmap().toString('base64')};},fileData[fileIds.image].toString('base64'));
+  assert.deepEqual(copiedImage,expectedImage,'Clipboard contains the original image pixels, not a screenshot or URL');
+  await app.evaluate(({clipboard})=>clipboard.clear());
+  await page.locator('#viewer-dialog').press(process.platform==='darwin'?'Meta+c':'Control+c');
+  await expect.poll(()=>app.evaluate(({clipboard})=>clipboard.has('image/png'))).toBe(true);
+  await assert.rejects(page.evaluate(id=>window.messenger.copyFileImage(id),fileIds.pdf),/이미지 파일/);
+  await page.screenshot({path:path.join(out,'viewer-image-copy.png')});
   await page.locator('#viewer-close').click();
   await page.locator(`[data-open-file="${fileIds.video}"]`).click();
   await expect(page.locator('#viewer-title')).toHaveText('team-video.webm');
+  await expect(page.locator('#viewer-copy')).toHaveCount(0);
   try { await expect.poll(() => page.locator('.viewer-video').evaluate(video => video.readyState)).toBeGreaterThanOrEqual(2); }
   catch (error) { console.error('Video diagnostics', await page.evaluate(() => { const v = document.querySelector('.viewer-video'); return v ? { error: v.error?.message, code: v.error?.code, network: v.networkState, source: v.currentSrc } : 'no viewer'; }), mediaRequests.filter(r => r.id === fileIds.video)); throw error; }
   await page.locator('.viewer-video').evaluate(video => video.play());
@@ -594,6 +629,12 @@ let app, server, websocket, fixtureEvents;
   await expect(page.locator(`[data-message-id="${replyId}"] .reply-reference-author`)).toContainText('팀원');
   await page.locator(`[data-message-id="${replyId}"] .bubble`).scrollIntoViewIfNeeded();
   await page.screenshot({ path: path.join(out, 'inline-reply.png') });
+  const recentOriginal=page.locator('[data-message-id="'+replyId+'"] .reply-reference-jump');
+  await recentOriginal.focus();await page.keyboard.press('Enter');
+  await expect(page.locator('.message-target')).toHaveAttribute('data-message-id',sourceId);
+  await expect(page.locator('.message-target')).toBeInViewport();
+  await page.locator('#message-back').click();
+  await expect(page.locator('[data-message-id="'+replyId+'"]')).toBeAttached();
   await page.locator(`[data-message-id="${replyId}"] [data-post-action="thread"]`).click();
   await expect(page.locator('#thread-content')).toContainText('원문에 대한 답장');
   await page.locator('#message-dialog-close').click();
@@ -762,7 +803,7 @@ let app, server, websocket, fixtureEvents;
   await expect(page.locator('.queued-file')).toHaveCount(0);
   await page.locator('#logout').click();
   assert.deepEqual(errors, []);
-  console.log('PASS: reaction add/remove/users/custom/sync/failure, right-click menu, 209-image grid, top new-message alerts/navigation/drafts, plus previous feature regression');
+  console.log('PASS: inline original jump, keyboard activation, missing/forbidden originals, draft/visual-position back; reaction, media, notification and previous feature regression');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => {
   if (app) await app.close();
   clearInterval(fixtureEvents);if(websocket){for(const socket of websocket.clients)socket.terminate();websocket.close();}

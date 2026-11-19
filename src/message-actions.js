@@ -42,7 +42,7 @@ const messageActions = (() => {
   }
   function referenceBody(root) {
     if (root.delete_at) return '<p class="reply-reference-missing">삭제된 원문입니다.</p>';
-    return `<strong class="reply-reference-author">↪ ${esc(displayName(state.users[root.user_id]))}님의 메시지</strong>${root.message ? `<div class="reply-reference-text rich-text">${composer.format(root.message)}</div>` : ''}${media.attachments(root)}${!root.message && !root.file_ids?.length ? '<p class="reply-reference-missing">내용이 없는 메시지입니다.</p>' : ''}`;
+    return `<div class="reply-reference-heading"><strong class="reply-reference-author">↪ ${esc(displayName(state.users[root.user_id]))}님의 메시지</strong><button type="button" class="reply-reference-jump" data-post-action="original" data-post-id="${esc(root.id)}" aria-label="원본 메시지로 이동">원본으로 이동 ↗</button></div>${root.message ? `<div class="reply-reference-text rich-text">${composer.format(root.message)}</div>` : ''}${media.attachments(root)}${!root.message && !root.file_ids?.length ? '<p class="reply-reference-missing">내용이 없는 메시지입니다.</p>' : ''}`;
   }
   function reference(post) {
     if (!post.root_id) return '';
@@ -94,6 +94,7 @@ const messageActions = (() => {
       if (action === 'pin') return messagePins.toggle(id);
       if (action === 'react') return reactions.openPicker(id);
       if (action === 'thread') return thread(id);
+      if (action === 'original') return await messageNavigation.openPost(id);
       if (!post) return;
       if (action === 'reply') return reply(post);
       if (action === 'copy') { await api?.copyText(post.message || ''); toast('메시지 내용을 복사했습니다.'); return; }
