@@ -25,3 +25,45 @@
     Quit
   moyeo_check_done:
 !macroend
+
+# Keep electron-builder's generated uninstaller, registry/shortcut handling and
+# atomic file-lock rollback. Older installed uninstallers can have an invalid CRC
+# after cross-building on macOS; never run them or disable their integrity check.
+!macro moyeoUpgradeLog TEXT
+  Push $R8
+  Push $R9
+  StrCpy $R9 0
+  ${If} ${Errors}
+    StrCpy $R9 1
+  ${EndIf}
+  DetailPrint "${TEXT}"
+  ClearErrors
+  FileOpen $R8 "$TEMP\Moyeo-install.log" a
+  ${IfNot} ${Errors}
+    FileWrite $R8 "${TEXT}$\r$\n"
+    FileClose $R8
+  ${EndIf}
+  ${If} $R9 == 1
+    SetErrors
+  ${Else}
+    ClearErrors
+  ${EndIf}
+  Pop $R9
+  Pop $R8
+!macroend
+
+!macro moyeoPrepareUpgradeUninstaller
+  # Only a registered app directory containing the expected application payload
+  # can be passed to the bundled uninstaller. Never remove an arbitrary folder.
+  ${IfNot} ${FileExists} "$installationDir\${APP_EXECUTABLE_FILENAME}"
+  ${OrIfNot} ${FileExists} "$installationDir\resources\app.asar"
+    !insertmacro moyeoUpgradeLog "Upgrade refused: registered application payload missing: $installationDir"
+    MessageBox MB_OK|MB_ICONEXCLAMATION "The registered installation folder does not contain the expected application. Details: $TEMP\Moyeo-install.log" /SD IDOK
+    SetErrorLevel 2
+    Quit
+  ${EndIf}
+  !insertmacro moyeoUpgradeLog "Using verified bundled uninstaller; registered directory: $installationDir"
+  File "/oname=$uninstallerFileNameTemp" "${UNINSTALLER_OUT_FILE}"
+  # If execution is blocked, the fallback must not invoke the broken legacy file.
+  StrCpy $uninstallerFileName "$uninstallerFileNameTemp"
+!macroend
