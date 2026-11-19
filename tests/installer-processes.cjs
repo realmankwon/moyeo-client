@@ -1,5 +1,5 @@
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict');
-const {spawn}=require('node:child_process');
+const {spawn,spawnSync}=require('node:child_process');
 const root=path.resolve(__dirname,'..');
 async function run(file,args){return new Promise((resolve,reject)=>{const child=spawn(file,args,{windowsHide:true,stdio:'ignore'});child.once('error',reject);child.once('exit',code=>resolve(code));});}
 (async()=>{
@@ -13,7 +13,7 @@ async function run(file,args){return new Promise((resolve,reject)=>{const child=
   await fs.mkdir(install);await fs.mkdir(other);
   const installer=await start(path.join(install,'Moyeo-Setup.exe')),sibling=await start(path.join(install,'Moyeo Helper.exe')),elsewhere=await start(path.join(other,'Moyeo.exe'));
   assert.equal(await check('Check'),0,'Setup/helper and folder prefix are not the app');
-  const target=await start(path.join(install,'Moyeo.exe'));assert.equal(await check('Check'),10,'Exact installed app detected');
+  const target=await start(path.join(install,'Moyeo.exe'));const detected=await check('Check');if(detected!==10){console.error({install,realPath:await fs.realpath(install),fixtureExecutable,exitCode:target.exitCode,signalCode:target.signalCode});console.error(spawnSync(powershell,['-NoProfile','-Command',"Get-CimInstance Win32_Process -Filter \"Name='Moyeo.exe'\" | Select-Object ProcessId,SessionId,ExecutablePath | ConvertTo-Json"],{encoding:'utf8',windowsHide:true}).stdout);}assert.equal(detected,10,'Exact installed app detected');
   assert.equal(await check('Close'),0,'Legacy leftover closes after graceful request');
   assert.equal(await check('Check'),0);assert.equal(alive(target),false);for(const child of [installer,sibling,elsewhere])assert.equal(alive(child),true,'Unrelated processes survive');
   console.log('PASS: exact path, apostrophe/spaces, same-name other folder, installer/helper exclusion, legacy-process cleanup');

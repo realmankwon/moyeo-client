@@ -7,20 +7,38 @@ param(
 $ErrorActionPreference = 'Stop'
 try {
   if ([IO.Path]::GetFileName($ExecutableName) -ne $ExecutableName -or $ExecutableName -notmatch '^[a-zA-Z0-9._ -]+[.]exe$') { throw 'Invalid executable name' }
-  $targetPath = [IO.Path]::GetFullPath([IO.Path]::Combine($InstallDir,$ExecutableName))
+  # Hosted runners and some user profiles expose TEMP as an 8.3 path.
+  # Expand aliases before comparing with Win32_Process.ExecutablePath.
+  Add-Type -TypeDefinition @"
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public static class MoyeoInstallerPaths {
+  [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+  public static extern uint GetLongPathName(string shortPath, StringBuilder longPath, uint length);
+}
+"@
+  function Resolve-MoyeoPath([string]$value) {
+    $full = [IO.Path]::GetFullPath($value)
+    $buffer = New-Object Text.StringBuilder 32768
+    $length = [MoyeoInstallerPaths]::GetLongPathName($full,$buffer,32768)
+    if ($length -gt 0 -and $length -lt 32768) { return $buffer.ToString() }
+    return $full
+  }
+  $targetPath = Resolve-MoyeoPath ([IO.Path]::Combine($InstallDir,$ExecutableName))
   $currentSession = (Get-Process -Id $PID).SessionId
   function Get-MoyeoProcesses {
     try {
       $candidates = @(Get-CimInstance -ClassName Win32_Process -Filter "Name='$ExecutableName'" -ErrorAction Stop)
       if (@($candidates | Where-Object { $_.SessionId -eq $currentSession -and -not $_.ExecutablePath }).Count -gt 0) { throw 'Cannot inspect application path' }
       return @($candidates | Where-Object {
-        $_.ExecutablePath -and $_.SessionId -eq $currentSession -and [string]::Equals($_.ExecutablePath,$targetPath,[StringComparison]::OrdinalIgnoreCase)
+        $_.ExecutablePath -and $_.SessionId -eq $currentSession -and [string]::Equals((Resolve-MoyeoPath $_.ExecutablePath),$targetPath,[StringComparison]::OrdinalIgnoreCase)
       } | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue })
     } catch {
       $candidates = @(Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($ExecutableName)) -ErrorAction SilentlyContinue)
       if (@($candidates | Where-Object { $_.SessionId -eq $currentSession -and -not $_.Path }).Count -gt 0) { throw 'Cannot inspect application path' }
       return @($candidates | Where-Object {
-        $_.SessionId -eq $currentSession -and $_.Path -and [string]::Equals($_.Path,$targetPath,[StringComparison]::OrdinalIgnoreCase)
+        $_.SessionId -eq $currentSession -and $_.Path -and [string]::Equals((Resolve-MoyeoPath $_.Path),$targetPath,[StringComparison]::OrdinalIgnoreCase)
       })
     }
   }
@@ -47,7 +65,7 @@ try {
   # in this interactive session, and revalidate each PID immediately beforehand.
   foreach ($process in @(Get-MoyeoProcesses)) {
     $fresh = Get-Process -Id $process.Id -ErrorAction SilentlyContinue
-    if ($fresh -and $fresh.SessionId -eq $currentSession -and $fresh.Path -and [string]::Equals($fresh.Path,$targetPath,[StringComparison]::OrdinalIgnoreCase)) {
+    if ($fresh -and $fresh.SessionId -eq $currentSession -and $fresh.Path -and [string]::Equals((Resolve-MoyeoPath $fresh.Path),$targetPath,[StringComparison]::OrdinalIgnoreCase)) {
       Stop-Process -Id $fresh.Id -Force -ErrorAction Stop
     }
   }
