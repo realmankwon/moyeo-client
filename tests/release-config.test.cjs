@@ -8,6 +8,8 @@ test('releases use GitHub version notices and manual download without update-ins
   assert.equal(config.nsis.deleteAppDataOnUninstall, false); assert.ok(config.nsis.include.endsWith('installer.nsh'));  assert.equal(config.mac.forceCodeSigning, false);
   assert.equal(config.mac.notarize, false); assert.equal(config.mac.identity, '-');
   assert.deepEqual(config.win.target, [{ target: 'nsis', arch: ['x64'] }]);
+  assert.equal(config.win.signAndEditExecutable, true, 'Cross-built EXE resources must keep the new app icon');
+  assert.ok(config.win.icon.endsWith('icon.ico')); assert.ok(config.mac.icon.endsWith('icon.icns'));
   assert.deepEqual(config.pkg.mustClose, ['com.moyeo.mattermost']);
   assert.equal(config.pkg.isRelocatable, false); assert.equal(config.pkg.overwriteAction, 'upgrade');
   assert.equal(config.pkg.allowCurrentUserHome, false); assert.equal(config.pkg.installLocation, '/Applications');

@@ -1,17 +1,5 @@
 const {messageNotificationId,notificationTarget,accountHash}=require('./notifications.cjs');
-function defaultBitmap() {
-  const bytes = Buffer.alloc(32 * 32 * 4);
-  for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
-    const rounded = x >= 5 && x < 27 || y >= 5 && y < 27 || (x - (x < 16 ? 5 : 26)) ** 2 + (y - (y < 16 ? 5 : 26)) ** 2 <= 25;
-    if (!rounded) continue;
-    const bubble = ((x-16)/10) ** 2 + ((y-14)/8) ** 2 < 1 || (x >= 8 && x <= 13 && y >= 19 && y <= 24 && x+y <= 34);
-    const inset = ((x-16)/7.8) ** 2 + ((y-14)/5.8) ** 2 < 1;
-    const dark = bubble && !inset;
-    const at = (y*32+x)*4;
-    bytes[at] = dark ? 50 : 74; bytes[at+1] = dark ? 46 : 227; bytes[at+2] = dark ? 40 : 254; bytes[at+3] = 255;
-  }
-  return bytes;
-}
+const {trayImage}=require('./icons.cjs');
 class DesktopService {
   constructor(electron, win, options) {
     this.e = electron; this.win = win; this.options = options; this.settings = { name: '모여', soundEnabled: true }; this.count = 0; this.rooms = new Map(); this.notices = new Map(); this.quitting = false; this.lastSound = 0; this.brand = '';
@@ -29,10 +17,7 @@ class DesktopService {
     this.refresh();
   }
   image() {
-    let bytes = defaultBitmap();
-    if (this.brand) { const image = this.e.nativeImage.createFromDataURL(this.brand); if (!image.isEmpty()) bytes = image.resize({ width: 32, height: 32 }).toBitmap(); }
-    if (this.count) for (let y = 0; y < 13; y++) for (let x = 19; x < 32; x++) if ((x-25)**2+(y-6)**2 <= 36) { const at=(y*32+x)*4; bytes[at]=76; bytes[at+1]=77; bytes[at+2]=228; bytes[at+3]=255; }
-    return this.e.nativeImage.createFromBitmap(bytes, { width: 32, height: 32 });
+    return trayImage(this.e.nativeImage,{unread:!!this.count,logo:this.brand});
   }
   configure(settings) { this.settings = { ...this.settings, ...settings }; this.brand = settings.logo || ''; this.refresh(); }
   show() { if (this.win.isDestroyed()) return; if (this.win.isMinimized()) this.win.restore(); this.win.show(); this.win.focus(); this.win.flashFrame(false); }
@@ -79,5 +64,5 @@ class DesktopService {
   read(channel) { this.rooms.delete(channel); this.notices.get(channel)?.close(); this.notices.delete(channel); this.refresh(); }
   setCount(count) { this.count = count; if (!count) { this.rooms.clear(); for (const notice of this.notices.values()) notice.close(); this.notices.clear(); this.win.flashFrame(false); } this.refresh(); }
 }
-module.exports = { DesktopService, defaultBitmap };
+module.exports = { DesktopService };
 

@@ -21,6 +21,7 @@ const { quitForInstall } = require('./install-exit.cjs');
 const { AccountService } = require('./account.cjs');
 const { AdminService } = require('./admin.cjs');
 const { configureNotifications } = require('./notifications.cjs');
+const { appIconPath } = require('./icons.cjs');
 // Keep the existing app-data path and macOS encryption identity across installer builds.
 app.setName('moyeo-mattermost-client');
 if (!app.commandLine.hasSwitch('user-data-dir')) {
@@ -51,13 +52,14 @@ async function readSettings() {
   catch { return { ...defaults }; }
 }
 if (singleInstance) app.whenReady().then(async () => {
+  if (process.platform === 'darwin') app.dock.setIcon(appIconPath);
   const sessions = new SessionStore(path.join(app.getPath('userData'), 'login.bin'), electron.safeStorage);
   const notificationPolicy=await configureNotifications(electron);
   const startup = new StartupService(app,process.env,process.execPath,notificationPolicy.startupName);
   let incomingReady=false;
   const startHidden = app.commandLine.hasSwitch('start-in-tray') || (process.platform === 'darwin' && app.getLoginItemSettings().wasOpenedAtLogin);
   win = new BrowserWindow({ skipTaskbar:false, show: !startHidden, width: 1180, height: 800, minWidth: 860, minHeight: 620, backgroundColor: '#f8f9fb',
-    title: '모여 · Mattermost', autoHideMenuBar: true,
+    title: '모여 · Mattermost', icon: appIconPath, autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true, backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' } });
   chatWindows.register(win);
   handle('openFloatingChat',channel=>chatWindows.open(channel));

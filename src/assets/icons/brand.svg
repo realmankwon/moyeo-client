@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="96 96 832 832">
+  <defs>
+    <linearGradient id="tile" x1="192" y1="112" x2="820" y2="932" gradientUnits="userSpaceOnUse"><stop stop-color="#9295ff"/><stop offset=".48" stop-color="#686bea"/><stop offset="1" stop-color="#4147bd"/></linearGradient>
+    <linearGradient id="rim" x1="512" y1="96" x2="512" y2="928" gradientUnits="userSpaceOnUse"><stop stop-color="#fff" stop-opacity=".5"/><stop offset=".55" stop-color="#fff" stop-opacity=".07"/><stop offset="1" stop-color="#202775" stop-opacity=".24"/></linearGradient>
+    <linearGradient id="paper" x1="470" y1="390" x2="660" y2="740" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#eeefff"/></linearGradient>
+    <filter id="shadow" x="0" y="0" width="1024" height="1024" filterUnits="userSpaceOnUse"><feDropShadow dx="0" dy="17" stdDeviation="19" flood-color="#25276b" flood-opacity=".2"/></filter>
+    <filter id="bubbleShadow" x="180" y="180" width="680" height="660" filterUnits="userSpaceOnUse"><feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#25295f" flood-opacity=".18"/></filter>
+  </defs>
+  <g filter="url(#shadow)"><rect x="96" y="96" width="832" height="832" rx="198" fill="url(#tile)"/><rect x="98" y="98" width="828" height="828" rx="196" fill="none" stroke="url(#rim)" stroke-width="4"/></g>
+  <path d="M343 267h213c69 0 112 44 112 108v111c0 65-43 109-112 109H376l-99 65 18-99c-40-19-63-56-63-106v-80c0-64 43-108 111-108Z" fill="#d7d9ff" fill-opacity=".9"/>
+  <g filter="url(#bubbleShadow)"><path d="M465 386h199c75 0 121 43 121 110v82c0 46-20 80-57 100l17 86-94-60H465c-73 0-119-43-119-110v-98c0-67 46-110 119-110Z" fill="url(#paper)"/></g>
+  <g fill="#7478d6"><circle cx="464" cy="547" r="23"/><circle cx="563" cy="547" r="23"/><circle cx="662" cy="547" r="23"/></g>
+</svg>

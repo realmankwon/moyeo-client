@@ -18,8 +18,8 @@ function createConfig(env = process.env, { preview = false } = {}) {
     files: ['electron/**/*', 'src/**/*', 'package.json', '!**/.DS_Store', '!**/Data/**', '!**/login.bin', '!**/.env*'],
     extraMetadata: { moyeoUpdates: { enabled: !preview, mode: 'notify-download', repository } },
     publish: null,
-    win: { target: [{ target: 'nsis', arch: ['x64'] }], artifactName: 'Moyeo-${version}-Setup-${arch}.${ext}', signAndEditExecutable: Boolean(env.WIN_CSC_LINK || process.platform === 'win32') },
-    nsis: { include: path.resolve(__dirname, '../build/installer.nsh'), oneClick: false, perMachine: false, allowElevation: true, allowToChangeInstallationDirectory: true, deleteAppDataOnUninstall: false, createDesktopShortcut: true, shortcutName: 'Moyeo', runAfterFinish: true, differentialPackage: false },
+    win: { icon: path.resolve(__dirname, '../build/icon.ico'), target: [{ target: 'nsis', arch: ['x64'] }], artifactName: 'Moyeo-${version}-Setup-${arch}.${ext}', signAndEditExecutable: true, signExecutable: Boolean(env.WIN_CSC_LINK || process.platform === 'win32') },
+    nsis: { include: path.resolve(__dirname, '../build/installer.nsh'), installerIcon: path.resolve(__dirname, '../build/icon.ico'), uninstallerIcon: path.resolve(__dirname, '../build/icon.ico'), oneClick: false, perMachine: false, allowElevation: true, allowToChangeInstallationDirectory: true, deleteAppDataOnUninstall: false, createDesktopShortcut: true, shortcutName: 'Moyeo', runAfterFinish: true, differentialPackage: false },
     pkg: {
       artifactName: 'Moyeo-${version}-mac-${arch}.${ext}',
       mustClose: ['com.moyeo.mattermost'],
@@ -28,6 +28,7 @@ function createConfig(env = process.env, { preview = false } = {}) {
       welcome: 'installer-welcome.html', conclusion: 'installer-conclusion.html'
     },
     mac: {
+      icon: path.resolve(__dirname, '../build/icon.icns'),
       target: [{ target: 'pkg', arch: ['arm64', 'x64'] }, { target: 'dmg', arch: ['arm64', 'x64'] }, { target: 'zip', arch: ['arm64', 'x64'] }],
       artifactName: 'Moyeo-${version}-mac-${arch}.${ext}', minimumSystemVersion: '13.0',
       category: 'public.app-category.social-networking',

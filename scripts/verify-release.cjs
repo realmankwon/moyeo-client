@@ -10,6 +10,7 @@ const plist = require('plist');
 const { validRepository } = require('../electron/updates.cjs');
 const pkg = require('../package.json');
 const { releaseManifest } = require('./release-manifest.cjs');
+const { verifyWindowsIcon, verifyMacIcon } = require('./verify-icons.cjs');
 const root = path.resolve(__dirname, '..');
 const args = process.argv.slice(2), preview = args.includes('--preview');
 const output = path.join(root, 'dist', preview ? 'preview' : 'release');
@@ -88,6 +89,7 @@ r=E.parse(sys.argv[1]).getroot(); print(json.dumps({'attributes':r.attrib,'upgra
     assert.deepEqual(packageInfo.upgrade, ['com.moyeo.mattermost']); assert.deepEqual(packageInfo.strict, ['com.moyeo.mattermost']);
     assert.deepEqual(await fs.readdir(path.join(component, 'Payload')), ['Moyeo.app']);
     const app = path.join(component, 'Payload/Moyeo.app');
+    verifyMacIcon(app);
     const executable = await fs.readFile(path.join(app, 'Contents/MacOS/Moyeo'));
     assert.equal(executable.readUInt32LE(4), arch === 'arm64' ? 0x0100000c : 0x01000007);
     assert.ok((await fs.stat(path.join(app, 'Contents/MacOS/Moyeo'))).mode & 0o111);
@@ -104,6 +106,8 @@ r=E.parse(sys.argv[1]).getroot(); print(json.dumps({'attributes':r.attrib,'upgra
     require('./nsis-integrity.cjs').verifyInstaller(path.join(output, `Moyeo-${pkg.version}-Setup-x64.exe`));
     const exe = await fs.readFile(path.join(output, `Moyeo-${pkg.version}-Setup-x64.exe`)); assert.equal(exe.toString('ascii', 0, 2), 'MZ');
     const runtime = await fs.readFile(path.join(output, 'win-unpacked/Moyeo.exe')); assert.equal(runtime.readUInt16LE(runtime.readUInt32LE(0x3c) + 4), 0x8664);
+    verifyWindowsIcon(path.join(output,'win-unpacked/Moyeo.exe'));
+    verifyWindowsIcon(path.join(output,`Moyeo-${pkg.version}-Setup-x64.exe`),{installer:true});
     const count = await verifyApp(path.join(output, 'win-unpacked/resources/app.asar'));
     await assert.rejects(fs.access(path.join(output, 'win-unpacked/portable.json')));
     console.log(`PASS: Windows x64 NSIS installer, runtime architecture, notification policy and ${count} matching source files (Windows execution unverified)`);
@@ -118,6 +122,7 @@ r=E.parse(sys.argv[1]).getroot(); print(json.dumps({'attributes':r.attrib,'upgra
         const app = path.join(temporary, 'Moyeo.app'), count = await verifyApp(path.join(app, 'Contents/Resources/app.asar'));
         const info = plist.parse(await fs.readFile(path.join(app, 'Contents/Info.plist'), 'utf8'));
         assert.equal(info.CFBundleIdentifier, 'com.moyeo.mattermost'); assert.equal(info.CFBundleShortVersionString, pkg.version); assert.equal(info.CFBundleExecutable, 'Moyeo');
+        verifyMacIcon(app);
         execFileSync('codesign', ['--verify', '--deep', '--strict', app], { stdio: 'inherit' });
         execFileSync('hdiutil', ['verify', path.join(output, `Moyeo-${pkg.version}-mac-${arch}.dmg`)], { stdio: 'ignore' });
         console.log(`PASS: Mac ${arch} ZIP CRCs, architecture, executable permissions, ${links} symlinks, native signature, DMG and ${count} matching source files (execution not tested here)`);

@@ -26,7 +26,7 @@ icons.lock = '<rect x="5.5" y="10" width="13" height="10" rx="2.5"/><path d="M8.
 icons.hash = '<path d="m10 4-3 16M17 4l-3 16M5 9h15M4 15h15"/>';
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const icon = key => `<svg viewBox="0 0 24 24" aria-hidden="true">${icons[key] || icons.chat}</svg>`;
-const imageOrIcon = (key, fallback) => state.settings[key] ? `<img src="${esc(state.settings[key])}" alt="">` : icon(fallback);
+const imageOrIcon = (key, fallback) => state.settings[key] ? `<img src="${esc(state.settings[key])}" alt="">` : key === 'logo' ? '<img class="default-brand" src="assets/icons/brand.svg" alt="">' : icon(fallback);
 const brand = () => `<div class="brand"><span class="brandmark">${imageOrIcon('logo', 'chat')}</span><span>${esc(state.settings.name)}</span></div>`;
 const displayName = user => user ? (user.nickname?.trim() || user.username || [user.first_name, user.last_name].filter(Boolean).join(' ')) : '알 수 없는 사용자';
 const avatar = (name, color = 0, small = false) => `<span class="avatar color-${color % 5}${small ? ' small' : ''}" aria-hidden="true">${esc([...name][0] || '?')}</span>`;

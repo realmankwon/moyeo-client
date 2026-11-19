@@ -87,3 +87,5 @@ body:not(.floating) .shell{grid-template-columns:72px 344px minmax(0,1fr)}
 @media(max-width:1050px){body:not(.floating) .shell{grid-template-columns:64px 290px minmax(0,1fr)}.list-head{padding:19px 15px 13px}.list-scroll{padding-left:7px;padding-right:7px}.conversation-list .chat-row{gap:10px;padding-left:9px;padding-right:9px}.chat-row>.avatar{width:38px;height:38px;border-radius:12px}.row-title{font-size:12px}.row-preview{font-size:10px}.row-context{max-width:60px}.conversation-row .favorite-toggle{right:6px}.chat-header{padding-left:15px;padding-right:15px}}
 @media(hover:none){.conversation-row .favorite-toggle{opacity:1}}
 @media(prefers-reduced-motion:reduce){.conversation-row,.nav-button,.search,.favorite-toggle{transition:none}}
+
+.brandmark:has(.default-brand){background:transparent}.brandmark .default-brand{border-radius:12px}

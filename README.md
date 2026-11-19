@@ -167,7 +167,7 @@ npm run release:preview
 npm run verify:release -- --preview
 ```
 
-`test:ui`는 Mattermost와 GIPHY 테스트 응답, 별도 임시 설정 폴더로 Electron 앱을 검사합니다. 실제 사용 서버의 GIPHY 키와 네트워크 연결은 별도 확인이 필요합니다. 기존 기능 회귀 외에 이미지 209개 모아보기의 높이·스크롤, 반응 추가·취소·사용자 목록·권한 실패·동기화, 우클릭 메뉴, 새 메시지 상단 알림·숨김·바로 이동·작성 보존을 검사합니다. OS 알림 팝업은 테스트에서 억제하고 알림 클릭의 앱 이동 경로를 검사합니다. `test:updates`는 로컬 HTTP 서버의 릴리스 응답으로 Windows와 두 Mac 아키텍처의 새 버전 탐색·다운로드 페이지 안내·응답 오류 처리를 검사합니다. 앱이 바이너리를 내려받거나 설치·재시작하지 않는지도 확인합니다. `dist:win`은 Windows 설치형, `dist:mac`은 Mac PKG·DMG·ZIP을 만듭니다. [배포 안내](docs/updates.md)를 참고하세요. 앱 내 로고 변경은 실행 중인 창과 앱 화면에 적용되며 배포 아이콘은 기본 Electron 아이콘입니다.
+`test:ui`는 Mattermost와 GIPHY 테스트 응답, 별도 임시 설정 폴더로 Electron 앱을 검사합니다. 실제 사용 서버의 GIPHY 키와 네트워크 연결은 별도 확인이 필요합니다. 기존 기능 회귀 외에 이미지 209개 모아보기의 높이·스크롤, 반응 추가·취소·사용자 목록·권한 실패·동기화, 우클릭 메뉴, 새 메시지 상단 알림·숨김·바로 이동·작성 보존을 검사합니다. OS 알림 팝업은 테스트에서 억제하고 알림 클릭의 앱 이동 경로를 검사합니다. `test:updates`는 로컬 HTTP 서버의 릴리스 응답으로 Windows와 두 Mac 아키텍처의 새 버전 탐색·다운로드 페이지 안내·응답 오류 처리를 검사합니다. 앱이 바이너리를 내려받거나 설치·재시작하지 않는지도 확인합니다. `dist:win`은 Windows 설치형, `dist:mac`은 Mac PKG·DMG·ZIP을 만듭니다. [배포 안내](docs/updates.md)를 참고하세요. 앱 내 로고 변경은 실행 중인 창과 앱 화면에 적용되며 배포 아이콘은 Moyeo 말풍선 심볼을 사용합니다. `build/icon.svg`와 `build/tray.svg`를 수정한 뒤 `npm run generate:icons`로 Windows ICO·Mac ICNS·Retina 메뉴 막대 이미지를 함께 생성합니다.
 
 API 참고: [Mattermost API](https://docs.mattermost.com/api), [채널 조회](https://docs.mattermost.com/api/reference/get-channels-for-user), [Electron 보안](https://www.electronjs.org/docs/latest/tutorial/security).
 
