@@ -40,6 +40,7 @@
   ClearErrors
   FileOpen $R8 "$TEMP\Moyeo-install.log" a
   ${IfNot} ${Errors}
+    FileSeek $R8 0 END
     FileWrite $R8 "${TEXT}$\r$\n"
     FileClose $R8
   ${EndIf}
