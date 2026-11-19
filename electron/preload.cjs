@@ -1,5 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
 const api = {};
+api.setRoomTheme = (id, theme) => ipcRenderer.invoke('theme:room', id, theme);
+api.setGlobalChatTheme = (theme, replaceRooms) => ipcRenderer.invoke('theme:global', theme, replaceRooms);
+api.onPersonalThemes = listener => { const handler = (_event, value) => listener(value); ipcRenderer.on('personal:themes', handler); return () => ipcRenderer.removeListener('personal:themes', handler); };
 api.incomingReady=()=>ipcRenderer.invoke('incomingReady');
 api.testNotification=channel=>ipcRenderer.invoke('testNotification',channel);
 api.copyFileImage=id=>ipcRenderer.invoke('copyFileImage',id);

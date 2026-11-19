@@ -116,6 +116,14 @@ if (singleInstance) app.whenReady().then(async () => {
   const account = () => { if (!client.me) throw new Error('먼저 로그인해 주세요.'); return JSON.stringify([client.server, client.me.id]); };
   handle('getPersonalSettings', () => personal.get(account()));
   handle('savePersonalSettings', (field, value) => personal.update(account(), field, value));
+  const saveTheme = async change => {
+    const owner = account(), userId = client.me.id;
+    const settings = await change(owner);
+    if (client.me && account() === owner) chatWindows.broadcast('personal:themes', { userId, settings });
+    return settings;
+  };
+  handle('theme:room', (id, theme) => saveTheme(owner => personal.setRoomTheme(owner, id, theme)));
+  handle('theme:global', (theme, replaceRooms) => saveTheme(owner => personal.setGlobalTheme(owner, theme, replaceRooms)));
   handle('gifSearch', (term, offset) => { account(); return giphy.search(term, offset); });
   handle('gifById', id => { account(); return giphy.get(id); });
   handle('gifReload', () => { giphy.reset(); });

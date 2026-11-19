@@ -5,6 +5,28 @@ const os = require('node:os');
 const path = require('node:path');
 const { PersonalStore, validateTheme } = require('../electron/personal.cjs');
 const { GiphyService, mediaUrl } = require('../electron/giphy.cjs');
+const theme = background => ({ background, accent: '#8d92ed', selfText: '#ffffff', otherBubble: '#2c3a4d', otherText: '#e8eef7', surface: '#25364b', text: '#e8eef7', fontSize: 16, pattern: 'dots' });
+test('global chat theme persists, replaces room overrides atomically and isolates accounts', async t => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'moyeo-global-theme-')); t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const store = new PersonalStore(path.join(dir,'settings.json')), room = 'a'.repeat(26), other = 'b'.repeat(26);
+  await store.update('one','emojiFavorites',['❤️']); await store.setRoomTheme('one',room,theme('#112233')); await store.setRoomTheme('two',other,theme('#334455'));
+  await store.setGlobalTheme('one',theme('#203044'),false);
+  assert.equal((await store.get('one')).roomThemes[room].background,'#112233');
+  await store.setGlobalTheme('one',theme('#eee9f7'),true);
+  const reloaded = await new PersonalStore(store.file).get('one');
+  assert.deepEqual(reloaded.roomThemes,{}); assert.equal(reloaded.globalTheme.background,'#eee9f7'); assert.deepEqual(reloaded.emojiFavorites,['❤️']);
+  assert.equal((await store.get('two')).globalTheme,null); assert.equal((await store.get('two')).roomThemes[other].background,'#334455');
+  await store.setGlobalTheme('one',null,true); assert.equal((await store.get('one')).globalTheme,null); assert.deepEqual((await store.get('one')).emojiFavorites,['❤️']);
+});
+test('concurrent room edits after a global replacement cannot restore stale room overrides', async t => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'moyeo-theme-queue-')); t.after(() => fs.rm(dir,{recursive:true,force:true}));
+  const store = new PersonalStore(path.join(dir,'settings.json')), old = 'c'.repeat(26), next = 'd'.repeat(26);
+  await store.setRoomTheme('one',old,theme('#112233'));
+  await Promise.all([store.setGlobalTheme('one',theme('#203044'),true),store.setRoomTheme('one',next,theme('#445566')),store.update('one','gifFavorites',['hello'])]);
+  const saved=await store.get('one'); assert.deepEqual(Object.keys(saved.roomThemes),[next]); assert.equal(saved.globalTheme.background,'#203044'); assert.deepEqual(saved.gifFavorites,['hello']);
+  assert.throws(()=>store.setGlobalTheme('one',theme('url(file:///private)'),true)); assert.throws(()=>store.setGlobalTheme('one',theme('#112233'),'yes')); assert.throws(()=>store.setRoomTheme('one','../escape',theme('#112233')));
+  assert.deepEqual(await store.get('one'),saved);
+});
 test('personal bookmarks and themes persist without crossing accounts', async t => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'moyeo-settings-'));
   const store = new PersonalStore(path.join(dir, 'settings.json'));
