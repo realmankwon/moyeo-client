@@ -27,14 +27,16 @@ if (!app.commandLine.hasSwitch('user-data-dir')) {
 }
 configurePortable(app);
 const singleInstance = app.requestSingleInstanceLock();
+const installationExit = process.platform === 'win32' && app.commandLine.hasSwitch('quit-for-install');
 if (!singleInstance) app.quit();
+if (singleInstance && installationExit) app.exit(0);
 protocol.registerSchemesAsPrivileged([{ scheme: 'moyeo-media', privileges: { standard: true, secure: true, stream: true } },{scheme:'moyeo-assets',privileges:{standard:true,secure:true,supportFetchAPI:true,corsEnabled:true}}]);
 const client = new MattermostClient();
 const page = pathToFileURL(path.join(__dirname, '../src/index.html')).href;
 const chatWindows = new ChatWindows(electron,client,page);
 let win, desktop;
 const defaults = { name: '모여', accent: '#fee34a', chatBackground: '#e8eef3', logo: '', chatIcon: '', peopleIcon: '', settingsIcon: '', soundEnabled: true, autoLogin: true };
-app.on('second-instance', () => desktop?.show());
+app.on('second-instance', (_event, argv) => { if (process.platform === 'win32' && argv.includes('--quit-for-install')) app.quit(); else desktop?.show(); });
 app.on('activate', () => desktop?.show());
 function handle(name, fn) {
   ipcMain.handle(name, async (event, ...args) => {

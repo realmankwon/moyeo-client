@@ -24,16 +24,18 @@ async function sources(folder, prefix = '') {
   return files;
 }
 async function verifyApp(archive) {
-  const metadata = JSON.parse(asar.extractFile(archive, 'package.json'));
+  const extract=relative=>asar.extractFile(archive,relative.split('/').join(path.sep));
+  const entries=asar.listPackage(archive).map(name=>name.replaceAll('\\','/'));
+  const metadata = JSON.parse(extract('package.json'));
   assert.equal(metadata.version, pkg.version); assert.equal(metadata.moyeoUpdates.enabled, !preview);
   assert.equal(metadata.moyeoUpdates.mode, 'notify-download'); assert.ok(validRepository(metadata.moyeoUpdates.repository));
-  assert.equal(JSON.parse(asar.extractFile(archive, 'node_modules/semver/package.json')).version, pkg.dependencies.semver);
-  assert.ok(!asar.listPackage(archive).some(name => name.startsWith('/node_modules/electron-updater/')));
-  for (const name of asar.listPackage(archive)) assert.ok(!/(^|\/)(Data|login\.bin|\.env(?:\..*)?|\.DS_Store)$/.test(name), 'Private data in app: ' + name);
+  assert.equal(JSON.parse(extract('node_modules/semver/package.json')).version, pkg.dependencies.semver);
+  assert.ok(!entries.some(name => name.startsWith('/node_modules/electron-updater/')));
+  for (const name of entries) assert.ok(!/(^|\/)(Data|login\.bin|\.env(?:\..*)?|\.DS_Store)$/.test(name), 'Private data in app: ' + name);
   let count = 0;
   for (const folder of ['electron', 'src']) for (const name of await sources(path.join(root, folder))) {
     const relative = folder + '/' + name;
-    assert.deepEqual(asar.extractFile(archive, relative), await fs.readFile(path.join(root, relative)), relative); count++;
+    assert.deepEqual(extract(relative), await fs.readFile(path.join(root, relative)), relative); count++;
   }
   return count;
 }

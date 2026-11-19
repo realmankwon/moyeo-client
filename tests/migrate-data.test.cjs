@@ -21,6 +21,6 @@ test('malformed and symlinked legacy files are refused before copying', async t 
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'moyeo-import-')); t.after(() => fs.rm(root, { recursive: true, force: true }));
   const target = path.join(root, 'installed'); await fs.writeFile(path.join(root, 'appearance.json'), 'invalid');
   await assert.rejects(importLegacyData(root, target)); await assert.rejects(fs.access(target));
-  await fs.unlink(path.join(root, 'appearance.json')); await fs.writeFile(path.join(root, 'outside'), '{}'); await fs.symlink(path.join(root, 'outside'), path.join(root, 'appearance.json'));
+  await fs.unlink(path.join(root, 'appearance.json')); await fs.writeFile(path.join(root, 'outside'), '{}'); try { await fs.symlink(path.join(root, 'outside'), path.join(root, 'appearance.json')); } catch (error) { if (process.platform === 'win32' && error.code === 'EPERM') { t.diagnostic('Symbolic-link check requires Windows Developer Mode or elevation; malformed input was verified.'); return; } throw error; }
   await assert.rejects(importLegacyData(root, target), /형식/); await assert.rejects(fs.access(target));
 });
