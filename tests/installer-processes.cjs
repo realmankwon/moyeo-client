@@ -5,10 +5,10 @@ async function run(file,args){return new Promise((resolve,reject)=>{const child=
 (async()=>{
  if(process.platform!=='win32'){console.log('SKIP: Windows installer process integration');return;}
  const folder=await fs.mkdtemp(path.join(os.tmpdir(),"moyeo setup's test-")),install=path.join(folder,'Moyeo'),other=path.join(folder,'Moyeo-other');const children=[];
- const powershell=path.join(process.env.SystemRoot,'System32/WindowsPowerShell/v1.0/powershell.exe'),ping=path.join(process.env.SystemRoot,'System32/ping.exe');
+ const powershell=path.join(process.env.SystemRoot,'System32/WindowsPowerShell/v1.0/powershell.exe'),fixtureExecutable=process.execPath;
  const check=mode=>run(powershell,['-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',path.join(root,'build/installer-close.ps1'),'-InstallDir',install,'-Mode',mode]);
  const alive=child=>child.exitCode===null&&child.signalCode===null;
- async function start(file){await fs.copyFile(ping,file);const child=spawn(file,['-t','127.0.0.1'],{windowsHide:true,stdio:'ignore'});children.push(child);await new Promise((resolve,reject)=>{child.once('spawn',resolve);child.once('error',reject);});return child;}
+ async function start(file){await fs.copyFile(fixtureExecutable,file);const child=spawn(file,['-e','setInterval(()=>{},1000)'],{windowsHide:true,stdio:'ignore'});children.push(child);await new Promise((resolve,reject)=>{child.once('spawn',resolve);child.once('error',reject);});return child;}
  try{
   await fs.mkdir(install);await fs.mkdir(other);
   const installer=await start(path.join(install,'Moyeo-Setup.exe')),sibling=await start(path.join(install,'Moyeo Helper.exe')),elsewhere=await start(path.join(other,'Moyeo.exe'));

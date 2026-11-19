@@ -2,6 +2,11 @@ const path = require('node:path');
 const { validRepository } = require('../electron/updates.cjs');
 const pkg = require('../package.json');
 
+function normalizeSigningEnvironment(env) {
+  for (const name of ['CSC_LINK', 'WIN_CSC_LINK']) if (typeof env[name] === 'string' && !env[name].trim()) delete env[name];
+  return env;
+}
+
 function createConfig(env = process.env, { preview = false } = {}) {
   if (env.MOYEO_UPDATE_URL) throw Error('Use MOYEO_UPDATE_REPOSITORY=owner/repo for GitHub release notifications.');
   const repository = env.MOYEO_UPDATE_REPOSITORY || pkg.releaseRepository;
@@ -42,4 +47,4 @@ function assertMacCredentials(env = process.env) {
   const apiKey = env.APPLE_API_KEY && env.APPLE_API_KEY_ID && env.APPLE_API_ISSUER;
   if (!appleId && !apiKey) throw Error('Mac production builds require Apple notarization credentials (APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID or App Store Connect API credentials).');
 }
-module.exports = { createConfig, assertMacCredentials };
+module.exports = { createConfig, assertMacCredentials, normalizeSigningEnvironment };

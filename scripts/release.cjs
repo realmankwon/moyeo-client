@@ -1,11 +1,12 @@
 const { build, Platform, Arch } = require('electron-builder');
 const { execFileSync } = require('node:child_process');
 const path = require('node:path');
-const { createConfig, assertMacCredentials } = require('./release-config.cjs');
+const { createConfig, assertMacCredentials, normalizeSigningEnvironment } = require('./release-config.cjs');
 const { writeManifest } = require('./release-manifest.cjs');
 const root = path.resolve(__dirname, '..');
 
 (async () => {
+  normalizeSigningEnvironment(process.env);
   const args = process.argv.slice(2);
   for (const arg of args) if (!['--all', '--win', '--mac', '--preview', '--dir'].includes(arg)) throw Error('Unknown release option: ' + arg);
   const preview = args.includes('--preview');
