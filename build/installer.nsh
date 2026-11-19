@@ -40,6 +40,7 @@
   ClearErrors
   FileOpen $R8 "$TEMP\Moyeo-install.log" a
   ${IfNot} ${Errors}
+    FileSeek $R8 0 END
     FileWrite $R8 "${TEXT}$\r$\n"
     FileClose $R8
   ${EndIf}
@@ -53,14 +54,15 @@
 !macroend
 
 !macro moyeoPrepareUpgradeUninstaller
-  # Only a registered app directory containing the expected application payload
-  # can be passed to the bundled uninstaller. Never remove an arbitrary folder.
+  # An incomplete installation cannot be safely removed recursively. Keep its
+  # folder and all unknown files, skip its uninstaller, and let the normal
+  # extraction step restore the selected destination and update registration.
   ${IfNot} ${FileExists} "$installationDir\${APP_EXECUTABLE_FILENAME}"
   ${OrIfNot} ${FileExists} "$installationDir\resources\app.asar"
-    !insertmacro moyeoUpgradeLog "Upgrade refused: registered application payload missing: $installationDir"
-    MessageBox MB_OK|MB_ICONEXCLAMATION "The registered installation folder does not contain the expected application. Details: $TEMP\Moyeo-install.log" /SD IDOK
-    SetErrorLevel 2
-    Quit
+    !insertmacro moyeoUpgradeLog "Repair install: incomplete registered payload; preserving folder: $installationDir; destination: $INSTDIR"
+    StrCpy $R0 0
+    ClearErrors
+    Return
   ${EndIf}
   !insertmacro moyeoUpgradeLog "Using verified bundled uninstaller; registered directory: $installationDir"
   File "/oname=$uninstallerFileNameTemp" "${UNINSTALLER_OUT_FILE}"
