@@ -28,6 +28,7 @@ jobs:
       - run: npm test
       - run: npm run test:updates
       - run: npm run test:installer
+      - run: npm run test:management
       - name: Build Windows installer
         shell: bash
         run: |

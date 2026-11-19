@@ -294,6 +294,7 @@ function renderChat() {
   if(!state.demo&&!isFloating){$('.header-actions').insertAdjacentHTML('afterbegin','<button class="icon-btn" id="open-floating" title="이 채팅방을 별도 창으로 열기" aria-label="채팅방 별도 창으로 열기">↗</button>');$('#open-floating').onclick=async event=>{const button=event.currentTarget;button.disabled=true;try{await api.openFloatingChat(channel.id);}catch(error){toast(error.message);}finally{button.disabled=false;}};}
   if(isFloating){$('.header-actions').insertAdjacentHTML('afterbegin','<button class="icon-btn" id="float-pin" aria-label="항상 위에 표시" title="항상 위에 표시" aria-pressed="'+(state.floatingTop?'true':'false')+'">📌</button>');$('#float-pin').onclick=async event=>{const button=event.currentTarget;try{const enabled=await api.setFloatingTop(button.getAttribute('aria-pressed')!=='true');state.floatingTop=enabled;button.setAttribute('aria-pressed',String(enabled));}catch(error){toast(error.message);}};}
   $('#room-theme').onclick = personal.openTheme;
+  messagePins.mount();
   personal.apply();
   messageNavigation.paint();
   $('#open-library').onclick = media.openLibrary;
@@ -429,12 +430,7 @@ function openSettings() {
       } catch (error) { toast(error.message); }
     };
   }
-  if(state.me&&!state.demo){
-    $('.dialog-footer',dialog).insertAdjacentHTML('beforebegin','<section class="settings-section"><button type="button" class="system-console-entry" id="open-system-console" disabled>System Console 권한 확인 중…</button><p class="console-description" id="console-access-description">서버의 사용자·팀·채널·권한·환경 설정을 관리합니다.</p></section>');
-    const epoch=state.generation;
-    api.getConsoleAccess().then(access=>{if(!dialog.open||epoch!==state.generation||!$('#open-system-console'))return;$('#open-system-console').disabled=!access.available;$('#open-system-console').textContent=access.available?'System Console · 서버 관리 열기':'System Console · 접근 권한 없음';$('#console-access-description').textContent=access.available?'현재 계정 권한으로 앱 내 관리 창을 엽니다. 저장한 변경은 서버에 반영됩니다.':'현재 계정에 서버 관리 권한이 없습니다. 관리자 또는 위임받은 계정으로 로그인해 주세요.';}).catch(error=>{if($('#open-system-console'))$('#open-system-console').textContent='권한 확인 실패';if($('#console-access-description'))$('#console-access-description').textContent=error.message;});
-    $('#open-system-console').onclick=async event=>{event.currentTarget.disabled=true;try{await api.openSystemConsole();dialog.close();}catch(error){toast(error.message);}finally{if($('#open-system-console'))$('#open-system-console').disabled=false;}};
-  }
+  serverSettings.mount(dialog);
   $('.dialog-footer', dialog).insertAdjacentHTML('beforebegin', `<section class="settings-section"><label class="sound-setting"><input id="sound-enabled" type="checkbox" ${state.settings.soundEnabled !== false ? 'checked' : ''}> 새 메시지 알림 소리</label><p class="dialog-intro" style="margin-top:10px;margin-bottom:0">창을 닫으면 트레이에서 계속 실행됩니다.<br>완전히 끝내려면 트레이 메뉴에서 ‘완전히 종료’를 선택하세요.</p></section>`);
   $('.dialog-footer', dialog).insertAdjacentHTML('beforebegin', `<section class="settings-section"><label class="sound-setting"><input id="auto-login" type="checkbox" ${state.settings.autoLogin !== false ? 'checked' : ''}> 로그인 기억 · 다음 실행 시 자동 로그인</label><label class="sound-setting" style="margin-top:12px"><input id="start-at-login" type="checkbox" ${state.settings.startAtLogin ? 'checked' : ''}> ${state.settings.platform === 'darwin' ? 'Mac 로그인 시 메뉴 막대로 실행' : '윈도우 시작 시 트레이로 실행'}</label><p class="dialog-intro" style="margin-top:10px;margin-bottom:0">자동 로그인은 이 운영체제 사용자 계정에서 사용할 수 있습니다.<br>앱을 이동하면 시작 실행 옵션을 다시 저장하세요.</p></section>`);
   dialog.querySelectorAll('[data-image]').forEach(button => button.onclick = async () => {
@@ -464,6 +460,7 @@ function openSettings() {
   dialog.showModal();
 }
 async function logout(skipServer = false) {
+  serverSettings.reset();messagePins.reset();
   historyCleanup();historyPositionCleanup();state.historyLoading=false;
   if(typeof mentions!=='undefined')mentions.reset();
   if(typeof realtime!=='undefined')realtime.reset();
