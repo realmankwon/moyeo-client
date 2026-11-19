@@ -69,3 +69,8 @@
   # If execution is blocked, the fallback must not invoke the broken legacy file.
   StrCpy $uninstallerFileName "$uninstallerFileNameTemp"
 !macroend
+
+# Start the installed executable, not a shell-associated shortcut file.
+!macro customInstall
+  StrCpy $launchLink "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
+!macroend

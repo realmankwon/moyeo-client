@@ -39,6 +39,9 @@ jobs:
             npm run dist:win
             node scripts/verify-release.cjs --win
           fi
+      - name: Verify installed Windows notification activation
+        if: inputs.mode == 'production'
+        run: node tests/notifications-native-win.cjs
       - uses: actions/upload-artifact@v4
         with:
           name: windows-${{ inputs.mode }}

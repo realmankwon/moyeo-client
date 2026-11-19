@@ -19,6 +19,7 @@ const { UpdateService } = require('./updates.cjs');
 const { importLegacyData } = require('./migrate-data.cjs');
 const { quitForInstall } = require('./install-exit.cjs');
 const { AccountService } = require('./account.cjs');
+const { configureNotifications } = require('./notifications.cjs');
 // Keep the existing app-data path and macOS encryption identity across installer builds.
 app.setName('moyeo-mattermost-client');
 if (!app.commandLine.hasSwitch('user-data-dir')) {
@@ -48,10 +49,11 @@ async function readSettings() {
   try { return { ...defaults, ...JSON.parse(await fs.readFile(path.join(app.getPath('userData'), 'appearance.json'), 'utf8')) }; }
   catch { return { ...defaults }; }
 }
-if (singleInstance) app.whenReady().then(() => {
+if (singleInstance) app.whenReady().then(async () => {
   const sessions = new SessionStore(path.join(app.getPath('userData'), 'login.bin'), electron.safeStorage);
-  const startup = new StartupService(app);
-  if (process.platform === 'win32') app.setAppUserModelId('com.moyeo.mattermost');
+  const notificationPolicy=await configureNotifications(electron);
+  const startup = new StartupService(app,process.env,process.execPath,notificationPolicy.startupName);
+  let incomingReady=false;
   const startHidden = app.commandLine.hasSwitch('start-in-tray') || (process.platform === 'darwin' && app.getLoginItemSettings().wasOpenedAtLogin);
   win = new BrowserWindow({ skipTaskbar:false, show: !startHidden, width: 1180, height: 800, minWidth: 860, minHeight: 620, backgroundColor: '#f8f9fb',
     title: '모여 · Mattermost', autoHideMenuBar: true,
@@ -62,10 +64,12 @@ if (singleInstance) app.whenReady().then(() => {
   handle('setCurrentChannel',(channel,title)=>chatWindows.setChannel(channel,title));
   handle('getActiveChannels',()=>chatWindows.activeChannels());
   handle('setFloatingTop',value=>chatWindows.setTop(value));
-  desktop = new DesktopService(electron, win, { session: () => client.mediaKey, saveSound: async enabled => {
+  desktop = new DesktopService(electron, win, { session: () => client.mediaKey,nativeNotifications:notificationPolicy.native,ready:()=>incomingReady,account:()=>client.me?JSON.stringify([client.server,client.me.id]):null, saveSound: async enabled => {
     const settings = await readSettings(); settings.soundEnabled = enabled;
     await fs.writeFile(path.join(app.getPath('userData'), 'appearance.json'), JSON.stringify(settings)); return settings;
   } });
+  handle('incomingReady',()=>{if(chatWindows.actor()?.floating)return;incomingReady=!!client.me;desktop.flushActivation();});
+  handle('testNotification',async channel=>{if(chatWindows.actor()?.floating||!client.me)throw Error('먼저 로그인해 주세요.');const room=(await client.request('/channels/'+require('./client.cjs').validId(channel))).data;desktop.notify({channel,title:(room.display_name||'Moyeo')+' · 알림 테스트'},client.mediaKey,true);return true;});
   const updatePolicy = require('../package.json').moyeoUpdates || {};
   const updates = new UpdateService({ app, enabled: updatePolicy.enabled, repository: updatePolicy.repository,
     request: (url, options) => net.fetch(url, options), openExternal: url => electron.shell.openExternal(url)
@@ -134,6 +138,7 @@ if (singleInstance) app.whenReady().then(() => {
     desktop.setCount(count);
   });
   handle('connect', async data => {
+    incomingReady=false;
     if(chatWindows.actor()?.floating)throw Error('계정 변경은 메인 창에서 해주세요.');
     chatWindows.closeFloating();
     systemConsole.close(); typing.stop(); resetComposer(); giphy.reset(); await sessions.clear();
@@ -153,7 +158,7 @@ if (singleInstance) app.whenReady().then(() => {
   });
   registerFiles(client, handle, () => chatWindows.owner()||win, giphy);
   const resetComposer = registerComposer(client, handle, () => chatWindows.owner()||win, giphy);
-  handle('disconnect', async () => { chatWindows.closeFloating();systemConsole.close(); typing.stop(); await sessions.clear(); resetComposer(); giphy.reset(); const connected=!!client.me;try{return await client.disconnect();}finally{if(connected)chatWindows.broadcast('account:cleared');} });
+  handle('disconnect', async () => {incomingReady=false;desktop.resetActivation(); chatWindows.closeFloating();systemConsole.close(); typing.stop(); await sessions.clear(); resetComposer(); giphy.reset(); const connected=!!client.me;try{return await client.disconnect();}finally{if(connected)chatWindows.broadcast('account:cleared');} });
   handle('view',async channel=>{const result=await client.view(channel);chatWindows.read(channel);return result;});
   handle('send',async(...args)=>{const result=await client.send(...args);chatWindows.broadcast('chat:posted',result);return result;});
   for (const method of ['channels', 'users', 'posts', 'searchUsers', 'direct', 'teams', 'favorites', 'setFavorite']) handle(method, (...args) => client[method](...args));

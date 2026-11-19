@@ -1,5 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 const api = {};
+api.incomingReady=()=>ipcRenderer.invoke('incomingReady');
+api.testNotification=channel=>ipcRenderer.invoke('testNotification',channel);
 for(const name of ['filePreview','openSavedFile','showSavedFile'])api[name]=(...args)=>ipcRenderer.invoke(name,...args);
 for(const name of ['openFloatingChat','getFloatingContext','setCurrentChannel','getActiveChannels','setFloatingTop'])api[name]=(...args)=>ipcRenderer.invoke(name,...args);
 for(const [method,event]of [['onChannelRead','chat:read'],['onPostSent','chat:posted'],['onAccountCleared','account:cleared']])api[method]=listener=>{const handler=(_event,data)=>listener(data);ipcRenderer.on(event,handler);return()=>ipcRenderer.removeListener(event,handler);};
