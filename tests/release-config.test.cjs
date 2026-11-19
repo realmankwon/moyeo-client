@@ -5,7 +5,7 @@ test('releases use GitHub version notices and manual download without update-ins
   const config = createConfig({});
   assert.equal(config.publish, null); assert.equal(config.extraMetadata.moyeoUpdates.repository, require('../package.json').releaseRepository);
   assert.equal(config.extraMetadata.moyeoUpdates.mode, 'notify-download'); assert.equal(config.extraMetadata.moyeoUpdates.enabled, true);
-  assert.equal(config.nsis.deleteAppDataOnUninstall, false); assert.equal(config.mac.forceCodeSigning, false);
+  assert.equal(config.nsis.deleteAppDataOnUninstall, false); assert.ok(config.nsis.include.endsWith('installer.nsh'));  assert.equal(config.mac.forceCodeSigning, false);
   assert.equal(config.mac.notarize, false); assert.equal(config.mac.identity, '-');
   assert.deepEqual(config.win.target, [{ target: 'nsis', arch: ['x64'] }]);
   assert.deepEqual(config.pkg.mustClose, ['com.moyeo.mattermost']);

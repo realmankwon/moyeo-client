@@ -14,7 +14,7 @@ function createConfig(env = process.env, { preview = false } = {}) {
     extraMetadata: { moyeoUpdates: { enabled: !preview, mode: 'notify-download', repository } },
     publish: null,
     win: { target: [{ target: 'nsis', arch: ['x64'] }], artifactName: 'Moyeo-${version}-Setup-${arch}.${ext}', signAndEditExecutable: Boolean(env.WIN_CSC_LINK || process.platform === 'win32') },
-    nsis: { oneClick: false, perMachine: false, allowElevation: true, allowToChangeInstallationDirectory: true, deleteAppDataOnUninstall: false, createDesktopShortcut: true, shortcutName: '모여', runAfterFinish: true, differentialPackage: false },
+    nsis: { include: path.resolve(__dirname, '../build/installer.nsh'), oneClick: false, perMachine: false, allowElevation: true, allowToChangeInstallationDirectory: true, deleteAppDataOnUninstall: false, createDesktopShortcut: true, shortcutName: '모여', runAfterFinish: true, differentialPackage: false },
     pkg: {
       artifactName: 'Moyeo-${version}-mac-${arch}.${ext}',
       mustClose: ['com.moyeo.mattermost'],
