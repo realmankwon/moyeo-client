@@ -393,9 +393,20 @@ let app, server, websocket, fixtureEvents;
   await page.locator(`[data-open-file="${fileIds.image}"]`).click();
   await expect(page.locator('#viewer-title')).toHaveText('photo.png');
   await expect.poll(() => page.locator('.viewer-image').evaluate(img => img.naturalWidth)).toBeGreaterThan(0);
+  await page.locator('#viewer-copy').click();
+  await expect(page.locator('#viewer-status')).toContainText('클립보드에 복사');
+  const copiedImage=await app.evaluate(async({clipboard,nativeImage})=>{const item=(await clipboard.read()).find(item=>item.types.includes('image/png'));if(!item)return null;const bytes=Buffer.from(await(await item.getType('image/png')).arrayBuffer()),image=nativeImage.createFromBuffer(bytes);return {size:image.getSize(),pixels:image.toBitmap().toString('base64')};});
+  const expectedImage=await app.evaluate(({nativeImage},encoded)=>{const image=nativeImage.createFromBuffer(Buffer.from(encoded,'base64'));return {size:image.getSize(),pixels:image.toBitmap().toString('base64')};},fileData[fileIds.image].toString('base64'));
+  assert.deepEqual(copiedImage,expectedImage,'Clipboard contains the original image pixels, not a screenshot or URL');
+  await app.evaluate(({clipboard})=>clipboard.clear());
+  await page.locator('#viewer-dialog').press(process.platform==='darwin'?'Meta+c':'Control+c');
+  await expect.poll(()=>app.evaluate(({clipboard})=>clipboard.has('image/png'))).toBe(true);
+  await assert.rejects(page.evaluate(id=>window.messenger.copyFileImage(id),fileIds.pdf),/이미지 파일/);
+  await page.screenshot({path:path.join(out,'viewer-image-copy.png')});
   await page.locator('#viewer-close').click();
   await page.locator(`[data-open-file="${fileIds.video}"]`).click();
   await expect(page.locator('#viewer-title')).toHaveText('team-video.webm');
+  await expect(page.locator('#viewer-copy')).toHaveCount(0);
   try { await expect.poll(() => page.locator('.viewer-video').evaluate(video => video.readyState)).toBeGreaterThanOrEqual(2); }
   catch (error) { console.error('Video diagnostics', await page.evaluate(() => { const v = document.querySelector('.viewer-video'); return v ? { error: v.error?.message, code: v.error?.code, network: v.networkState, source: v.currentSrc } : 'no viewer'; }), mediaRequests.filter(r => r.id === fileIds.video)); throw error; }
   await page.locator('.viewer-video').evaluate(video => video.play());
