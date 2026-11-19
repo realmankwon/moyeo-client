@@ -101,6 +101,7 @@ r=E.parse(sys.argv[1]).getroot(); print(json.dumps({'attributes':r.attrib,'upgra
 (async () => {
   if (!onlyWin && !onlyMac) assert.deepEqual(JSON.parse(await fs.readFile(path.join(output, 'moyeo-release.json'), 'utf8')), releaseManifest());
   if (!onlyMac) {
+    require('./nsis-integrity.cjs').verifyInstaller(path.join(output, `Moyeo-${pkg.version}-Setup-x64.exe`));
     const exe = await fs.readFile(path.join(output, `Moyeo-${pkg.version}-Setup-x64.exe`)); assert.equal(exe.toString('ascii', 0, 2), 'MZ');
     const runtime = await fs.readFile(path.join(output, 'win-unpacked/Moyeo.exe')); assert.equal(runtime.readUInt16LE(runtime.readUInt32LE(0x3c) + 4), 0x8664);
     const count = await verifyApp(path.join(output, 'win-unpacked/resources/app.asar'));

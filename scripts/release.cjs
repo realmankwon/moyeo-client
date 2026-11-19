@@ -3,6 +3,8 @@ const { execFileSync } = require('node:child_process');
 const path = require('node:path');
 const { createConfig, assertMacCredentials, normalizeSigningEnvironment } = require('./release-config.cjs');
 const { writeManifest } = require('./release-manifest.cjs');
+const { prepareNsis } = require('./prepare-nsis.cjs');
+const { verifyInstaller } = require('./nsis-integrity.cjs');
 const root = path.resolve(__dirname, '..');
 
 (async () => {
@@ -17,7 +19,9 @@ const root = path.resolve(__dirname, '..');
   if (mac && process.platform !== 'darwin') throw Error('Mac packages must be built on macOS for native signing and verification.');
   if (mac && process.env.MOYEO_MAC_SIGNED === '1') assertMacCredentials();
   for (const script of ['generate-emoji.cjs', 'generate-preview.cjs']) execFileSync(process.execPath, [path.join(__dirname, script)], { cwd: root, stdio: 'inherit' });
+  if (win) prepareNsis();
   if (win) await build({ projectDir: root, config: structuredClone(config), publish: 'never', targets: Platform.WINDOWS.createTarget(args.includes('--dir') ? 'dir' : 'nsis', Arch.x64) });
+  if (win && !args.includes('--dir')) verifyInstaller(path.join(root,config.directories.output,`Moyeo-${require('../package.json').version}-Setup-x64.exe`));
   if (mac) await build({ projectDir: root, config: structuredClone(config), publish: 'never', targets: Platform.MAC.createTarget(args.includes('--dir') ? 'dir' : ['pkg', 'dmg', 'zip'], Arch.arm64, Arch.x64) });
   if (win && mac && !args.includes('--dir')) await writeManifest(path.join(root, config.directories.output));
   console.log(preview ? 'Preview artifacts: release notifications are disabled.' : 'Installers created with new-version notifications and browser download guidance. Upload all platform artifacts before publishing the GitHub release.');

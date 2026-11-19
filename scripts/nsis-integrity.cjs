@@ -1,0 +1,10 @@
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),zlib=require('node:zlib');
+const signature=Buffer.from('efbeadde4e756c6c736f6674496e7374','hex');
+function nsisHeader(buffer){assert.equal(buffer.subarray(0,2).toString(),'MZ','Expected Windows executable');for(let offset=512;offset+28<=Math.min(buffer.length,1024*1024);offset+=512){if(!buffer.subarray(offset+4,offset+20).equals(signature))continue;const length=buffer.readUInt32LE(offset+24),end=offset+length;assert.ok(length>=32&&end<=buffer.length,'Invalid NSIS length');return {offset,end,flags:buffer.readUInt32LE(offset)};}throw Error('NSIS header not found');}
+// NSIS stores its first header on a 512-byte boundary. Its CRC excludes the
+// first 512 PE bytes and the final CRC word; certificate data can follow it.
+function verifyIntegrity(buffer){const header=nsisHeader(buffer);assert.equal(zlib.crc32(buffer.subarray(512,header.end-4)),buffer.readUInt32LE(header.end-4),'NSIS integrity check failed');return header;}
+function extractUninstaller(buffer){const {offset,end}=verifyIntegrity(buffer);let position=offset+28;const found=[];while(position<end-4){assert.ok(position+4<=end-4,'Truncated NSIS block');const flags=buffer.readUInt32LE(position),size=flags&0x7fffffff;assert.ok(size>0&&position+4+size<=end-4,'Invalid NSIS block');let block=buffer.subarray(position+4,position+4+size);if(flags&0x80000000)block=zlib.inflateRawSync(block,{maxOutputLength:32*1024*1024});if(block.subarray(0,2).toString()==='MZ'){let header;try{header=nsisHeader(block);}catch{}if(header?.flags&1)found.push(block);}position+=4+size;}assert.equal(found.length,1,'Expected one embedded NSIS uninstaller');return found[0];}
+function verifyInstaller(file){const uninstaller=extractUninstaller(fs.readFileSync(file));verifyIntegrity(uninstaller);return uninstaller;}
+module.exports={nsisHeader,verifyIntegrity,extractUninstaller,verifyInstaller};
+if(require.main===module){for(const file of process.argv.slice(2)){verifyInstaller(path.resolve(file));console.log('PASS: installer and embedded uninstaller CRC: '+path.basename(file));}}
