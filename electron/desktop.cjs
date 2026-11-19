@@ -1,3 +1,4 @@
+const {messageNotificationId,notificationTarget,accountHash}=require('./notifications.cjs');
 function defaultBitmap() {
   const bytes = Buffer.alloc(32 * 32 * 4);
   for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
@@ -24,6 +25,7 @@ class DesktopService {
     win.on('focus', () => win.flashFrame(false));
     electron.app.on('before-quit', () => { this.quitting = true; });
     electron.app.on('will-quit', () => { this.updateNotice?.close(); for (const notice of this.notices.values()) notice.close(); this.tray.destroy(); });
+    if(options.nativeNotifications!==false&&typeof electron.Notification.handleActivation==='function'){electron.Notification.handleActivation(details=>this.activate(details));electron.Notification.isSupported();}
     this.refresh();
   }
   image() {
@@ -34,7 +36,10 @@ class DesktopService {
   }
   configure(settings) { this.settings = { ...this.settings, ...settings }; this.brand = settings.logo || ''; this.refresh(); }
   show() { if (this.win.isDestroyed()) return; if (this.win.isMinimized()) this.win.restore(); this.win.show(); this.win.focus(); this.win.flashFrame(false); }
-  open(channel, epoch) { if (epoch !== this.options.session()) return; this.show(); this.win.webContents.send('incoming:open', channel); }
+  open(channel, epoch) { if (epoch !== this.options.session()) return; this.show();if(this.options.ready&&!this.options.ready()){const account=this.options.account?.();if(account)this.pendingActivation={channel,account:accountHash(account)};return;}this.win.webContents.send('incoming:open', channel); }
+  activate(details){if(details?.type&&details.type!=='click')return;const target=notificationTarget(details?.arguments);if(!target)return;if(target.update){this.show();return;}this.lastActivation={id:target.id,time:Date.now()};this.pendingActivation=target;this.show();this.flushActivation();}
+  flushActivation(){const target=this.pendingActivation,account=this.options.account?.();if(!target||!account||(this.options.ready&&!this.options.ready()))return;this.pendingActivation=null;if(target.account===accountHash(account))this.open(target.channel,this.options.session());}
+  resetActivation(){this.pendingActivation=null;}
   refresh() {
     const name = this.settings.name || '모여'; this.tray.setImage(this.image()); this.tray.setToolTip(`${name}${this.count ? ` · 새 메시지 ${this.count}개 대화방` : ' · 실행 중'}`);
     const menu = [ { label: `${name} 열기`, click: () => this.show() } ];
@@ -42,16 +47,16 @@ class DesktopService {
     menu.push({ type: 'separator' }, { label: '알림 소리', type: 'checkbox', checked: this.settings.soundEnabled !== false, click: async item => { try { const settings = await this.options.saveSound(item.checked); this.configure(settings); this.win.webContents.send('incoming:sound-setting', item.checked); } catch { this.e.dialog.showErrorBox('알림 설정 저장 실패', '설정 폴더의 쓰기 권한을 확인해 주세요.'); this.refresh(); } } }, { label: '앱 데이터 폴더 열기', click: () => this.e.shell.openPath(this.e.app.getPath('userData')) }, { type: 'separator' }, { label: '완전히 종료', click: () => this.e.app.quit() });
     this.tray.setContextMenu(this.e.Menu.buildFromTemplate(menu));
   }
-  notify(value, epoch) {
+  notify(value, epoch, force=false) {
     this.rooms.delete(value.channel); this.rooms.set(value.channel, { title: value.title, epoch }); this.refresh();
     if (this.settings.soundEnabled !== false && Date.now() - this.lastSound > 1500) { this.lastSound = Date.now(); this.win.webContents.send('incoming:sound'); }
-    if (!this.win.isFocused()) {
+    if (force || !this.win.isFocused()) {
       this.win.flashFrame(true);
       const balloon = () => { this.balloon = { channel: value.channel, epoch }; this.tray.displayBalloon?.({ title: `${value.title.slice(0,80)} · 새 메시지`, content: '클릭하면 이 대화방으로 이동합니다.', noSound: true, respectQuietTime: true }); };
-      if (this.e.Notification.isSupported()) {
-        const notice = new this.e.Notification({ title: `${value.title.slice(0,80)} · 새 메시지`, body: '클릭하면 이 대화방으로 이동합니다.', silent: true });
+      if (this.options.nativeNotifications!==false&&this.e.Notification.isSupported()) {
+        const notice = new this.e.Notification({ ...(this.options.account?.()?{id:messageNotificationId(this.options.account(),value.channel)}:{}),title: `${value.title.slice(0,80)} · 새 메시지`, body: '클릭하면 이 대화방으로 이동합니다.', silent: true });
         this.notices.get(value.channel)?.close(); this.notices.set(value.channel, notice);
-        notice.on('click', () => this.open(value.channel, epoch)); notice.once('failed', balloon);
+        notice.on('click', () => {if(notice.id&&this.lastActivation?.id===notice.id&&Date.now()-this.lastActivation.time<1000)return;this.open(value.channel, epoch);}); notice.once('failed', balloon);
         try { notice.show(); } catch { balloon(); }
       } else balloon();
     }
@@ -64,10 +69,10 @@ class DesktopService {
     const title = `${this.settings.name || '모여'} 새 버전 ${value.nextVersion}`;
     const body = '클릭하면 메신저에서 새 버전 다운로드 안내를 확인할 수 있습니다.';
     const balloon = () => { this.balloon = { update: true }; this.tray.displayBalloon?.({ title, content: body, noSound: true, respectQuietTime: true }); };
-    if (!this.e.Notification.isSupported()) { balloon(); return; }
+    if (this.options.nativeNotifications===false||!this.e.Notification.isSupported()) { balloon(); return; }
     this.updateNotice?.close();
     try {
-      const notice = new this.e.Notification({ title, body, silent: true }); this.updateNotice = notice;
+      const notice = new this.e.Notification({ id: 'moyeo-update', title, body, silent: true }); this.updateNotice = notice;
       notice.on('click', () => this.show()); notice.once('failed', balloon); notice.show();
     } catch { balloon(); }
   }

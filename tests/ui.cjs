@@ -675,7 +675,7 @@ let app, server, websocket, fixtureEvents;
   await page.locator('#messages .message').last().evaluate(message => { const growth=document.createElement('div');growth.style.height='640px';message.querySelector('.message-content').append(growth); });
   await expect.poll(() => page.locator('#messages').evaluate((area,top) => Math.abs(area.scrollTop-top),readingTop)).toBeLessThan(3);
   // New messages remain visible at the top and navigate despite an active search.
-  await app.evaluate(({ Notification }) => { globalThis.__notificationObjects = []; Notification.prototype.show = function () { globalThis.__notificationObjects.push(this); }; });
+  await app.evaluate(({ Tray }) => { globalThis.__notificationObjects = []; Tray.prototype.displayBalloon = function () { globalThis.__notificationObjects.push(this); }; });
   await page.locator('#message-input').fill('트레이에서 보존할 작성 내용');
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close());
   assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible()), false);
@@ -684,7 +684,7 @@ let app, server, websocket, fixtureEvents;
   remotePosts.set(dm, [{ id: 'z'.repeat(26), channel_id: dm, user_id: other, message: '트레이 상태에서 받은 메시지', create_at: hiddenAt }]);
   await expect.poll(() => app.evaluate(() => globalThis.__notificationObjects.length), { timeout: 12000 }).toBeGreaterThan(0);
   await expect.poll(() => page.evaluate(() => window.__notificationSounds)).toBeGreaterThan(0);
-  await app.evaluate(() => globalThis.__notificationObjects.at(-1).emit('click'));
+  await app.evaluate(() => globalThis.__notificationObjects.at(-1).emit('balloon-click'));
   await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible())).toBe(true);
   await expect(page.locator('.bubble')).toHaveText('트레이 상태에서 받은 메시지');
   await page.locator(`[data-channel="${channel}"]`).click();

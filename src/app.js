@@ -279,7 +279,7 @@ async function selectChannel(id) {
     renderMessages(true); renderChannelList();
     await api.view(id);
   } catch (error) { if (state.selected === id) toast(error.message); }
-  finally{if(loading===state.loadingTicket){state.channelLoading=false;if(typeof realtime!=='undefined')realtime.ready();}}
+  finally{if(loading===state.loadingTicket){state.channelLoading=false;if(!isFloating)api?.incomingReady().catch(()=>{});if(typeof realtime!=='undefined')realtime.ready();}}
 }
 function renderChat() {
   const channel = state.channels.find(c => c.id === state.selected);
@@ -431,6 +431,7 @@ function openSettings() {
     };
   }
   serverSettings.mount(dialog);
+  if(state.me&&!state.demo&&!isFloating){$('.dialog-footer',dialog).insertAdjacentHTML('beforebegin','<section class="settings-section"><button type="button" class="secondary" id="test-notification">알림 테스트</button><p class="dialog-intro">작업표시줄의 Moyeo 알림을 클릭해 현재 대화방으로 돌아오는지 확인합니다.</p></section>');$('#test-notification').onclick=async()=>{try{await api.testNotification(state.selected);dialog.close();toast('Moyeo 테스트 알림을 표시했습니다.');}catch(error){toast(error.message);}};}
   $('.dialog-footer', dialog).insertAdjacentHTML('beforebegin', `<section class="settings-section"><label class="sound-setting"><input id="sound-enabled" type="checkbox" ${state.settings.soundEnabled !== false ? 'checked' : ''}> 새 메시지 알림 소리</label><p class="dialog-intro" style="margin-top:10px;margin-bottom:0">창을 닫으면 트레이에서 계속 실행됩니다.<br>완전히 끝내려면 트레이 메뉴에서 ‘완전히 종료’를 선택하세요.</p></section>`);
   $('.dialog-footer', dialog).insertAdjacentHTML('beforebegin', `<section class="settings-section"><label class="sound-setting"><input id="auto-login" type="checkbox" ${state.settings.autoLogin !== false ? 'checked' : ''}> 로그인 기억 · 다음 실행 시 자동 로그인</label><label class="sound-setting" style="margin-top:12px"><input id="start-at-login" type="checkbox" ${state.settings.startAtLogin ? 'checked' : ''}> ${state.settings.platform === 'darwin' ? 'Mac 로그인 시 메뉴 막대로 실행' : '윈도우 시작 시 트레이로 실행'}</label><p class="dialog-intro" style="margin-top:10px;margin-bottom:0">자동 로그인은 이 운영체제 사용자 계정에서 사용할 수 있습니다.<br>앱을 이동하면 시작 실행 옵션을 다시 저장하세요.</p></section>`);
   dialog.querySelectorAll('[data-image]').forEach(button => button.onclick = async () => {
