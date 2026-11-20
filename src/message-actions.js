@@ -1,6 +1,6 @@
 const messageActions = (() => {
   let replies = new Map(), ticket = 0;
-  let originals = new Map(), originalRequests = new Map();
+  let originals = new Map(), originalRequests = new Map(), menuLink = null;
   const errorText = error => error.message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '');
   const replyRoot = channel => replies.get(channel)?.rootId || '';
   function paintReply(channel = state.selected) {
@@ -18,21 +18,23 @@ const messageActions = (() => {
   }
   function sent(channel, root) { if (replyRoot(channel) === root) { replies.delete(channel); paintReply(channel); } }
   function controls() { return ''; }
-  function closeMenu(focus = false) { const menu = $('#message-context-menu'); if (!menu) return; const id = menu.dataset.postId; menu.hidden = true; menu.innerHTML = ''; if (focus && id) document.querySelector(`[data-message-id="${id}"]`)?.focus(); }
-  function openMenu(post, x, y) {
+  function closeMenu(focus = false) { const menu = $('#message-context-menu'); if (!menu) return; const id = menu.dataset.postId, link = menuLink; menuLink = null; menu.hidden = true; menu.innerHTML = ''; if (focus) { if (link?.isConnected) link.focus(); else if (id) document.querySelector(`[data-message-id="${id}"]`)?.focus(); } }
+  function openMenu(post, x, y, link = null) {
     const menu = $('#message-context-menu'), own = post.user_id === state.me.id && !post.type?.startsWith('system_');
     menu.innerHTML = [['pin',post.is_pinned?'메시지 고정 해제':'메시지 고정'],['react','이모지 반응'],['reply','답장'],['share','공유'],['copy','내용 복사'],['link','원문 링크 복사'],...(own ? [['edit','수정'],['delete','삭제']] : [])].map(([action,label]) => `<button type="button" role="menuitem" data-post-action="${action}" data-post-id="${esc(post.id)}">${label}</button>`).join('');
+    menuLink = link;
+    if (link) menu.insertAdjacentHTML('afterbegin', `<button type="button" role="menuitem" data-copy-link="${esc(link.dataset.link)}">링크 주소 복사</button>`);
     menu.dataset.postId = post.id; menu.hidden = false;
     menu.style.left = `${Math.max(8, Math.min(x, innerWidth - menu.offsetWidth - 8))}px`;
     menu.style.top = `${Math.max(8, Math.min(y, innerHeight - menu.offsetHeight - 8))}px`;
     menu.firstElementChild.focus();
   }
-  document.addEventListener('contextmenu', event => { const element = event.target.closest('[data-message-id]'); if (!element) return; const post = state.posts.find(p => p.id === element.dataset.messageId); if (post) { event.preventDefault(); openMenu(post, event.clientX, event.clientY); } });
+  document.addEventListener('contextmenu', event => { const element = event.target.closest('[data-message-id]'); if (!element) return; const post = state.posts.find(p => p.id === element.dataset.messageId); if (post) { event.preventDefault(); openMenu(post, event.clientX, event.clientY, event.target.closest('[data-link]')); } });
   document.addEventListener('pointerdown', event => { if (!event.target.closest('#message-context-menu')) closeMenu(); });
   document.addEventListener('keydown', event => {
     const menu = $('#message-context-menu');
     if (menu && !menu.hidden && ['Escape','ArrowDown','ArrowUp','Home','End'].includes(event.key)) { event.preventDefault(); if (event.key === 'Escape') { closeMenu(true); return; } const buttons = [...menu.querySelectorAll('button')], current = buttons.indexOf(document.activeElement), next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length-1 : (current + (event.key === 'ArrowUp' ? -1 : 1) + buttons.length) % buttons.length; buttons[next]?.focus(); return; }
-    if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) { const element = event.target.closest('[data-message-id]'); const post = state.posts.find(p => p.id === element?.dataset.messageId); if (post) { event.preventDefault(); const rect = element.getBoundingClientRect(); openMenu(post, rect.left + 25, rect.top + 25); } }
+    if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) { const element = event.target.closest('[data-message-id]'); const post = state.posts.find(p => p.id === element?.dataset.messageId); if (post) { event.preventDefault(); const link = event.target.closest('[data-link]'), rect = (link || element).getBoundingClientRect(); openMenu(post, rect.left + 25, rect.top + 25, link); } }
   });
   document.addEventListener('wheel', event => { if (!event.target.closest('#message-context-menu')) closeMenu(); }, { capture: true, passive: true });
   window.addEventListener('resize', () => closeMenu());
@@ -148,7 +150,11 @@ const messageActions = (() => {
       media.hydrateChat(posts, state.selected);
     } catch (error) { if (dialog.open && $('#thread-content')) $('#thread-content').textContent = errorText(error); }
   }
-  document.addEventListener('click', event => { const button = event.target.closest('[data-post-action]'); if (button) { event.preventDefault(); closeMenu(); run(button.dataset.postAction, button.dataset.postId); } });
+  document.addEventListener('click', async event => {
+    const link = event.target.closest('[data-copy-link]');
+    if (link) { event.preventDefault(); const address = link.dataset.copyLink; closeMenu(true); try { await api.copyText(address); toast('링크 주소를 복사했습니다.'); } catch (error) { toast(errorText(error)); } return; }
+    const button = event.target.closest('[data-post-action]'); if (button) { event.preventDefault(); closeMenu(); run(button.dataset.postAction, button.dataset.postId); }
+  });
   function reset() { replies = new Map(); originals = new Map(); originalRequests = new Map(); ticket++; $('#message-dialog').close(); closeMenu(); }
   return { mount, paintReply, replyRoot, sent, controls, annotation, reference, hydrateReferences, reset };
 })();
