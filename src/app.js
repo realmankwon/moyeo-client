@@ -549,3 +549,9 @@ async function poll() {
   }
 })();
 
+
+// Dialogs and picker handlers consume Escape before the chat window shortcut.
+document.addEventListener('keydown',event=>{
+  if(event.key!=='Escape'||event.defaultPrevented||event.isComposing||event.repeat||event.ctrlKey||event.metaKey||event.altKey||event.shiftKey||!state.me||!state.selected||document.querySelector('dialog[open]'))return;
+  event.preventDefault();api.closeChatWindow().catch(error=>toast(error.message));
+});

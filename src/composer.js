@@ -200,7 +200,7 @@ const composer = (() => {
     finally { if (epoch === state.generation) { busy.delete(channel); update(channel); if (state.selected === channel) $('#message-input')?.focus(); } }
   }
   document.addEventListener('pointerdown', event => { if ($('#emoji-panel') && !event.target.closest('#emoji-panel,#emoji,#custom-emoji-dialog')) $('#emoji-panel').hidden = true; });
-  document.addEventListener('keydown', event => { if (event.key === 'Escape' && $('#emoji-panel') && !$('#emoji-panel').hidden) { $('#emoji-panel').hidden = true; event.stopPropagation(); } });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && $('#emoji-panel') && !$('#emoji-panel').hidden) { event.preventDefault(); $('#emoji-panel').hidden = true; event.stopPropagation(); } });
   document.addEventListener('click', event => { const link = event.target.closest('[data-link]'); if (link) { event.preventDefault(); messageNavigation.open(link.dataset.link).catch(error => toast(cleanError(error))); } });
   function reset() { attachments = new Map(); busy = new Set(); custom = Object.create(null); recents = []; loaded = false; emojiPage = 0; emojiError = ''; hasMoreEmoji = true; emojiCategory = 'smile'; emojiQuery = ''; emojiTab = 'emoji'; $('#custom-emoji-dialog').close(); }
   async function queueGif(id) {

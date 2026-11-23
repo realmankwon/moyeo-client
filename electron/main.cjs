@@ -63,6 +63,7 @@ if (singleInstance) app.whenReady().then(async () => {
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true, backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' } });
   chatWindows.register(win);
   handle('openFloatingChat',channel=>chatWindows.open(channel));
+  handle('closeChatWindow',()=>{const owner=chatWindows.owner();setImmediate(()=>{if(owner&&!owner.isDestroyed())owner.close();});return true;});
   handle('getFloatingContext',()=>chatWindows.floatingContext());
   handle('setCurrentChannel',(channel,title)=>chatWindows.setChannel(channel,title));
   handle('getActiveChannels',()=>chatWindows.activeChannels());
