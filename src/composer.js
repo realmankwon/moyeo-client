@@ -27,7 +27,7 @@ const composer = (() => {
     form.querySelectorAll('[data-format]').forEach(button => button.onclick = () => applyFormat(button.dataset.format));
     $('#attach-files').onclick = () => choose();
     $('#emoji').title = '이모지 선택'; $('#emoji').setAttribute('aria-label', '이모지 선택');
-    $('#emoji').onclick = () => { const panel = $('#emoji-panel'); panel.hidden = !panel.hidden; if (!panel.hidden) { renderPicker(); load(); $('#emoji-search')?.focus(); } };
+    $('#emoji').onclick = () => { const panel = $('#emoji-panel'); panel.hidden = !panel.hidden; if (!panel.hidden) { emojiQuery = ''; emojiCategory = 'smile'; renderPicker(); load(); $('#emoji-search')?.focus(); } };
     $('#preview-toggle').onclick = () => {
       const preview = $('#composer-preview'), active = preview.hidden;
       preview.hidden = !active; $('#message-input').hidden = active; $('#preview-toggle').setAttribute('aria-pressed', String(active));
@@ -105,7 +105,7 @@ const composer = (() => {
   }
   function renderPicker() {
     const panel = $('#emoji-panel'); if (!panel) return;
-    const categories = [['favorites', '⭐', '즐겨찾기 이모지'], ['recent', '🕘', '최근 사용'], ['smile', '🙂', '표정'], ['people', '🙋', '사람·손'], ['nature', '🌿', '동물·자연'], ['food', '🍎', '음식'], ['travel', '✈️', '여행'], ['activity', '⚽', '활동'], ['objects', '💡', '사물'], ['symbols', '❤️', '기호'], ['flags', '🏳️', '깃발'], ['custom', '🧩', '서버 이모지']];
+    const categories = [['recent', '🕘', '최근 사용'], ['favorites', '⭐', '즐겨찾기 이모지'], ['smile', '🙂', '표정'], ['people', '🙋', '사람·손'], ['nature', '🌿', '동물·자연'], ['food', '🍎', '음식'], ['travel', '✈️', '여행'], ['activity', '⚽', '활동'], ['objects', '💡', '사물'], ['symbols', '❤️', '기호'], ['flags', '🏳️', '깃발'], ['custom', '🧩', '서버 이모지']];
     panel.innerHTML = `<div class="emoji-tabs"><button type="button" data-emoji-tab="emoji" class="${emojiTab === 'emoji' ? 'active' : ''}">☺ 이모지</button><button type="button" data-emoji-tab="gif" class="${emojiTab === 'gif' ? 'active' : ''}">▧ GIFs</button><button type="button" id="emoji-close" aria-label="이모지 선택기 닫기">×</button></div>${emojiTab === 'emoji' ? `<div class="emoji-search-wrap"><input id="emoji-search" placeholder="이모지 검색 (웃음, heart, +1…)" aria-label="이모지 검색" value="${esc(emojiQuery)}"></div><div class="emoji-categories">${categories.map(([key, symbol, label]) => `<button type="button" data-emoji-category="${key}" class="${emojiCategory === key ? 'active' : ''}" title="${label}" aria-label="${label}">${symbol}</button>`).join('')}</div><div class="emoji-scroll" id="emoji-results"></div><div class="emoji-footer"><span id="emoji-hover">이모지를 선택하세요</span><button type="button" id="create-emoji">사용자 이모지 추가</button></div>` : '<div class="gif-panel"><span>🎞️</span><h3>움직이는 GIF 보내기</h3><p>컴퓨터에 있는 GIF 파일을 선택하세요.<br>첨부한 뒤 전송 버튼으로 보낼 수 있어요.</p><button type="button" class="primary" id="choose-gif">GIF 파일 선택</button></div>'}`;
     panel.querySelectorAll('[data-emoji-tab]').forEach(button => button.onclick = () => { emojiTab = button.dataset.emojiTab; renderPicker(); });
     $('#emoji-close').onclick = () => { panel.hidden = true; };
@@ -122,10 +122,20 @@ const composer = (() => {
     const area = $('#emoji-results'); if (!area) return;
     const customItems = Object.values(custom).map(item => ({ emoji: `:${item.name}:`, name: item.name, category: 'custom', image_url: item.image_url, keywords: '서버 사용자' }));
     const all = [...EmojiData, ...customItems];
-    let items = emojiQuery ? all.filter(item => `${item.name} ${item.keywords} ${item.emoji}`.toLowerCase().includes(emojiQuery.toLowerCase().replace(/^:|:$/g, ''))) : ['recent','favorites'].includes(emojiCategory) ? (emojiCategory === 'recent' ? recents : personal.get('emojiFavorites')).map(value => all.find(item => item.emoji === value)).filter(Boolean) : all.filter(item => item.category === emojiCategory);
+    const recentItems = recents.map(value => all.find(item => item.emoji === value)).filter(Boolean);
+    let items = emojiQuery ? all.filter(item => `${item.name} ${item.keywords} ${item.emoji}`.toLowerCase().includes(emojiQuery.toLowerCase().replace(/^:|:$/g, ''))) : ['recent','favorites'].includes(emojiCategory) ? (emojiCategory === 'recent' ? recentItems : personal.get('emojiFavorites').map(value => all.find(item => item.emoji === value)).filter(Boolean)) : all.filter(item => item.category === emojiCategory);
     if (emojiQuery) { const exact = emojiQuery.toLowerCase().replace(/^:|:$/g, ''); items.sort((a, b) => Number(b.name.toLowerCase() === exact) - Number(a.name.toLowerCase() === exact)); }
-    const title = emojiQuery ? '검색 결과' : emojiCategory === 'recent' ? 'RECENTLY USED' : emojiCategory === 'custom' ? 'CUSTOM EMOJI' : 'EMOJI';
-    area.innerHTML = `<p class="emoji-section-label">${title}</p><div class="emoji-grid">${items.map((item, index) => `<button type="button" data-emote="${index}" title=":${esc(item.name)}:" aria-label="${esc(item.name)}">${item.image_url ? `<img src="${esc(item.image_url)}" alt="${esc(item.name)}">` : item.emoji}</button>`).join('')}</div>${!items.length ? '<p class="empty">해당하는 이모지가 없어요.</p>' : ''}${emojiError ? `<p class="emoji-warning">${esc(emojiError)}</p>` : ''}${emojiCategory === 'custom' && hasMoreEmoji && !state.demo ? '<button type="button" class="text-btn" id="more-emoji">서버 이모지 더 불러오기</button>' : ''}`;
+    const title = emojiQuery ? '검색 결과' : emojiCategory === 'recent' ? '최근 사용' : emojiCategory === 'favorites' ? '즐겨찾기' : emojiCategory === 'custom' ? '서버 이모지' : '이모지';
+    const sections = [];
+    if (!emojiQuery && !['recent','favorites','custom'].includes(emojiCategory) && recentItems.length) sections.push({ key: 'recent', title: '최근 사용', items: recentItems });
+    sections.push({ key: emojiQuery ? 'search' : emojiCategory, title, items });
+    let offset = 0;
+    const markup = sections.map(section => {
+      const start = offset; offset += section.items.length;
+      return `<section class="emoji-result-section" data-emoji-section="${section.key}" aria-label="${section.title}"><p class="emoji-section-label">${section.title}</p><div class="emoji-grid">${section.items.map((item, index) => `<button type="button" data-emote="${start + index}" title=":${esc(item.name)}:" aria-label="${esc(item.name)}">${item.image_url ? `<img src="${esc(item.image_url)}" alt="${esc(item.name)}">` : item.emoji}</button>`).join('')}</div>${!section.items.length ? '<p class="empty">해당하는 이모지가 없어요.</p>' : ''}</section>`;
+    }).join('');
+    items = sections.flatMap(section => section.items);
+    area.innerHTML = markup + (emojiError ? `<p class="emoji-warning">${esc(emojiError)}</p>` : '') + (emojiCategory === 'custom' && hasMoreEmoji && !state.demo ? '<button type="button" class="text-btn" id="more-emoji">서버 이모지 더 불러오기</button>' : '');
     area.querySelectorAll('[data-emote]').forEach(button => {
       const item = items[Number(button.dataset.emote)];
       const wrapper = document.createElement('span'); wrapper.className = 'emoji-cell'; button.replaceWith(wrapper); wrapper.append(button);
