@@ -2,7 +2,7 @@ const media = (() => {
   new ResizeObserver(()=>document.documentElement.style.setProperty('--saved-file-height',document.querySelector('#saved-file-notice').getBoundingClientRect().height+'px')).observe(document.querySelector('#saved-file-notice'));
   let files = new Map(), pending = new Map(), libraries = new Map(), failedFiles = new Set();
   let activeChannel = null, filter = 'media', query = '', sort = 'newest', viewing = null, viewerTicket = 0;
-  let animatedNodes=new Map();
+  let animatedNodes=new Map(), zoomCleanup=()=>{};
   function keepAnimation(image,key){const old=animatedNodes.get(key);if(old&&old.src===image.src&&old!==image){image.replaceWith(old);image=old;}animatedNodes.delete(key);animatedNodes.set(key,image);while(animatedNodes.size>80)animatedNodes.delete(animatedNodes.keys().next().value);}
   const animationKey=element=>(element.closest('[data-message-id]')?.dataset.messageId||'')+':'+(element.closest('[data-reply-reference]')?.dataset.replyReference||'');
   const kind = file => FileTypes.classify(file);
@@ -199,7 +199,7 @@ const media = (() => {
     viewing = { id, channel, category: ['image', 'video'].includes(kind(file)) ? 'media' : kind(file), loading: false };
     const dialog = $('#viewer-dialog');
     if (!dialog.open) dialog.showModal();
-    dialog.onclose = () => { stopPlayback(); viewing = null; viewerTicket++; dialog.innerHTML = ''; };
+    dialog.onclose = () => { zoomCleanup(); stopPlayback(); viewing = null; viewerTicket++; dialog.innerHTML = ''; };
     dialog.onkeydown = event => {
       if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'c' && !event.target.closest('input,textarea,select,.document-preview-host') && !window.getSelection()?.toString() && $('#viewer-copy')) { event.preventDefault(); $('#viewer-copy').click(); return; }
       if (!event.target.closest('input,textarea,select,.document-preview-host') && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) { event.preventDefault(); move(event.key === 'ArrowLeft' ? -1 : 1); }
@@ -212,7 +212,7 @@ const media = (() => {
   }
   function renderViewer() {
     if (!viewing || !$('#viewer-dialog').open) return;
-    stopPlayback();
+    zoomCleanup(); stopPlayback();
     const ticket = ++viewerTicket, file = files.get(viewing.id), type = kind(file), refs = sequence(), index = refs.findIndex(r => r.id === file.id);
     const lib = library(viewing.channel), ref = lib.refs.get(file.id);
     const dialog = $('#viewer-dialog');
@@ -223,7 +223,7 @@ const media = (() => {
     else if (FileTypes.previewType(file) && FileTypes.previewType(file)!=='text') stage = '<div id="document-preview-host" class="document-preview-host"></div>';
     else if (FileTypes.isText(file) && file.size <= 1048576) stage = '<pre id="text-preview" class="text-preview">텍스트를 불러오는 중…</pre>';
     else stage = `<div class="document-preview">${thumbnail(file)}<h3>${esc(file.name)}</h3><p>${esc(FileTypes.labels[type])} · ${size(file.size)}</p><p>이 형식은 저장 후 연결된 앱에서 열어보세요.</p><button class="primary" id="stage-download">파일 저장</button></div>`;
-    dialog.innerHTML = `<header class="viewer-header"><div><h2 id="viewer-title">${esc(file.name)}</h2><p>${esc(FileTypes.labels[type])} · ${size(file.size)} · ${new Date(ref.create_at).toLocaleString('ko-KR')}</p></div><button class="secondary" id="viewer-download">저장</button>${FileTypes.canOpen(file)?'<button class="secondary" id="viewer-save-open">저장 후 열기</button>':''}${type === 'image' ? '<button class="secondary" id="viewer-copy" title="이미지를 클립보드에 복사 (Ctrl+C / ⌘C)">이미지 복사</button><button class="secondary" id="viewer-zoom">확대</button>' : ''}<button class="icon-btn" id="viewer-close" aria-label="미리보기 닫기">${icon('close')}</button></header><div class="viewer-body"><button class="viewer-arrow" id="viewer-prev" aria-label="이전 미디어" ${index <= 0 ? 'disabled' : ''}>‹</button><div class="viewer-stage" id="viewer-stage">${stage}</div><button class="viewer-arrow" id="viewer-next" aria-label="다음 미디어" ${index === refs.length - 1 && lib.complete ? 'disabled' : ''}>›</button></div><p class="viewer-status" id="viewer-status" role="status"></p><footer class="viewer-footer"><div class="viewer-strip">${refs.filter(r => ['image', 'video'].includes(kind(files.get(r.id)))).map(r => `<button class="strip-item ${r.id === file.id ? 'active' : ''}" data-strip="${esc(r.id)}" aria-label="${esc(files.get(r.id).name)} 보기">${thumbnail(files.get(r.id))}</button>`).join('')}</div><span class="viewer-count">${index + 1} / ${refs.length}${lib.complete ? '' : '+'} · ← → 이동</span></footer>`;
+    dialog.innerHTML = `<header class="viewer-header"><div><h2 id="viewer-title">${esc(file.name)}</h2><p>${esc(FileTypes.labels[type])} · ${size(file.size)} · ${new Date(ref.create_at).toLocaleString('ko-KR')}</p></div><button class="secondary" id="viewer-download">저장</button>${FileTypes.canOpen(file)?'<button class="secondary" id="viewer-save-open">저장 후 열기</button>':''}${type === 'image' ? '<button class="secondary" id="viewer-copy" title="이미지를 클립보드에 복사 (Ctrl+C / ⌘C)">이미지 복사</button>' : ''}<button class="icon-btn" id="viewer-close" aria-label="미리보기 닫기">${icon('close')}</button></header>${type === 'image' ? ImageZoom.controls() : ''}<div class="viewer-body"><button class="viewer-arrow" id="viewer-prev" aria-label="이전 미디어" ${index <= 0 ? 'disabled' : ''}>‹</button><div class="viewer-stage" id="viewer-stage">${stage}</div><button class="viewer-arrow" id="viewer-next" aria-label="다음 미디어" ${index === refs.length - 1 && lib.complete ? 'disabled' : ''}>›</button></div><p class="viewer-status" id="viewer-status" role="status"></p><footer class="viewer-footer"><div class="viewer-strip">${refs.filter(r => ['image', 'video'].includes(kind(files.get(r.id)))).map(r => `<button class="strip-item ${r.id === file.id ? 'active' : ''}" data-strip="${esc(r.id)}" aria-label="${esc(files.get(r.id).name)} 보기">${thumbnail(files.get(r.id))}</button>`).join('')}</div><span class="viewer-count">${index + 1} / ${refs.length}${lib.complete ? '' : '+'} · ← → 이동</span></footer>`;
     $('#viewer-close').onclick = () => dialog.close();
     $('#viewer-download').onclick = () => download(file.id);
     if ($('#viewer-copy')) $('#viewer-copy').onclick = async event => {
@@ -236,7 +236,7 @@ const media = (() => {
     if ($('#stage-download')) $('#stage-download').onclick = () => download(file.id);
     $('#viewer-prev').onclick = () => move(-1);
     $('#viewer-next').onclick = () => move(1);
-    if ($('#viewer-zoom')) $('#viewer-zoom').onclick = () => { const zoom = $('#viewer-stage').classList.toggle('zoomed'); $('#viewer-zoom').textContent = zoom ? '화면에 맞춤' : '확대'; };
+    zoomCleanup = type === 'image' ? ImageZoom.mount(dialog) : () => {};
     dialog.querySelectorAll('[data-strip]').forEach(button => button.onclick = () => { viewing.id = button.dataset.strip; renderViewer(); });
     bindThumbnails($('.viewer-strip', dialog));
     const element = $('.viewer-stage img,.viewer-stage video,.viewer-stage audio', dialog);

@@ -390,9 +390,39 @@ let app, server, websocket, fixtureEvents;
   }
   await expect.poll(()=>page.locator(`[data-open-file="${fileIds.pdf}"] .program-icon img`).evaluate(image=>image.naturalWidth)).toBeGreaterThan(0);
   await page.screenshot({path:path.join(out,'image-ratio-and-program-icons.png')});
+  fileData[fileIds.image]=Buffer.from(await app.evaluate(({nativeImage},encoded)=>nativeImage.createFromBuffer(Buffer.from(encoded,'base64')).resize({width:1200,height:800}).toPNG(),pngBytes.toString('base64')));fileMeta[fileIds.image].size=fileData[fileIds.image].length;
   await page.locator(`[data-open-file="${fileIds.image}"]`).click();
   await expect(page.locator('#viewer-title')).toHaveText('photo.png');
   await expect.poll(() => page.locator('.viewer-image').evaluate(img => img.naturalWidth)).toBeGreaterThan(0);
+  await expect(page.locator('#viewer-fit')).toHaveAttribute('aria-pressed','true');
+  const initialScale=await page.locator('.viewer-image').evaluate(image=>image.getBoundingClientRect().width/image.naturalWidth);
+  await page.locator('#viewer-zoom-in').click();
+  const increasedScale=await page.locator('.viewer-image').evaluate(image=>image.getBoundingClientRect().width/image.naturalWidth);assert.ok(increasedScale>initialScale);
+  await page.locator('#viewer-actual-size').click();await expect(page.locator('#viewer-zoom-level')).toHaveText('100%');
+  await expect.poll(()=>page.locator('.viewer-image').evaluate(image=>image.getBoundingClientRect().width)).toBeCloseTo(1200,0);
+  for(let i=0;i<12&&await page.locator('#viewer-zoom-in').isEnabled();i++)await page.locator('#viewer-zoom-in').click();
+  await expect(page.locator('#viewer-zoom-level')).toHaveText('500%');await expect(page.locator('#viewer-zoom-in')).toBeDisabled();
+  const pan=await page.locator('#viewer-stage').evaluate(stage=>{stage.scrollLeft=0;stage.scrollTop=0;const image=stage.querySelector('img'),area=stage.getBoundingClientRect(),start=image.getBoundingClientRect();stage.scrollLeft=stage.scrollWidth;stage.scrollTop=stage.scrollHeight;const end=image.getBoundingClientRect();return {width:start.width,height:start.height,left:start.left-area.left,top:start.top-area.top,right:end.right-(area.left+stage.clientWidth),bottom:end.bottom-(area.top+stage.clientHeight),x:stage.scrollLeft,y:stage.scrollTop};});
+  assert.equal(pan.width,6000);assert.equal(pan.height,4000);assert.ok(pan.x>0&&pan.y>0);assert.ok(Math.abs(pan.left)<2&&Math.abs(pan.top)<2&&Math.abs(pan.right)<2&&Math.abs(pan.bottom)<2,JSON.stringify(pan));
+  await page.locator('#viewer-zoom-out').click();await expect(page.locator('#viewer-zoom-level')).toHaveText('400%');
+  await page.locator('#viewer-dialog').press('-');await expect(page.locator('#viewer-zoom-level')).toHaveText('300%');
+  await page.locator('#viewer-dialog').press('+');await expect(page.locator('#viewer-zoom-level')).toHaveText('400%');
+  await page.locator('#viewer-stage').dispatchEvent('wheel',{deltaY:-100,ctrlKey:true});await expect(page.locator('#viewer-zoom-level')).toHaveText('500%');
+  for(let i=0;i<20&&await page.locator('#viewer-zoom-out').isEnabled();i++)await page.locator('#viewer-zoom-out').click();
+  await expect(page.locator('#viewer-zoom-level')).toHaveText('10%');await expect(page.locator('#viewer-zoom-out')).toBeDisabled();
+  await page.locator('#viewer-dialog').press('-');await expect(page.locator('#viewer-zoom-level')).toHaveText('10%');
+  await page.locator('#viewer-dialog').press('1');await expect(page.locator('#viewer-zoom-level')).toHaveText('100%');
+  await page.locator('#viewer-dialog').press('0');await expect(page.locator('#viewer-fit')).toHaveAttribute('aria-pressed','true');
+  const oldBounds=await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].getBounds());
+  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(1050,720));
+  await expect.poll(()=>page.locator('#viewer-stage').evaluate(stage=>{const image=stage.querySelector('img');return image.clientWidth<=stage.clientWidth&&image.clientHeight<=stage.clientHeight;})).toBe(true);
+  await page.locator('#viewer-actual-size').click();await expect.poll(()=>page.locator('.viewer-image').evaluate(image=>image.getBoundingClientRect().width)).toBeCloseTo(1200,0);
+  await app.evaluate(({BrowserWindow},bounds)=>BrowserWindow.getAllWindows()[0].setBounds(bounds),oldBounds);
+  await page.locator('#viewer-fit').click();
+  assert.equal(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.getZoomFactor()),1);
+  await page.locator('#viewer-next').click();await expect(page.locator('#viewer-title')).toHaveText('photo-two.png');await expect(page.locator('#viewer-fit')).toHaveAttribute('aria-pressed','true');
+  await page.locator('#viewer-prev').click();await expect(page.locator('#viewer-title')).toHaveText('photo.png');await expect(page.locator('#viewer-fit')).toHaveAttribute('aria-pressed','true');
+  await page.screenshot({path:path.join(out,'image-zoom-controls.png')});
   await page.locator('#viewer-copy').click();
   await expect(page.locator('#viewer-status')).toContainText('클립보드에 복사');
   const copiedImage=await app.evaluate(async({clipboard,nativeImage})=>{const item=(await clipboard.read()).find(item=>item.types.includes('image/png'));if(!item)return null;const bytes=Buffer.from(await(await item.getType('image/png')).arrayBuffer()),image=nativeImage.createFromBuffer(bytes);return {size:image.getSize(),pixels:image.toBitmap().toString('base64')};});
@@ -407,6 +437,7 @@ let app, server, websocket, fixtureEvents;
   await page.locator(`[data-open-file="${fileIds.video}"]`).click();
   await expect(page.locator('#viewer-title')).toHaveText('team-video.webm');
   await expect(page.locator('#viewer-copy')).toHaveCount(0);
+  await expect(page.locator('.viewer-zoom-controls')).toHaveCount(0);
   try { await expect.poll(() => page.locator('.viewer-video').evaluate(video => video.readyState)).toBeGreaterThanOrEqual(2); }
   catch (error) { console.error('Video diagnostics', await page.evaluate(() => { const v = document.querySelector('.viewer-video'); return v ? { error: v.error?.message, code: v.error?.code, network: v.networkState, source: v.currentSrc } : 'no viewer'; }), mediaRequests.filter(r => r.id === fileIds.video)); throw error; }
   await page.locator('.viewer-video').evaluate(video => video.play());
@@ -822,7 +853,7 @@ let app, server, websocket, fixtureEvents;
   await expect(page.locator('.queued-file')).toHaveCount(0);
   await page.locator('#logout').click();
   assert.deepEqual(errors, []);
-  console.log('PASS: inline original jump, keyboard activation, missing/forbidden originals, draft/visual-position back; reaction, media, notification and previous feature regression');
+  console.log('PASS: stepped image zoom (10%-500%), full-image panning, fit/100%, keyboard/wheel, resize and image navigation; inline original jump, keyboard activation, missing/forbidden originals, draft/visual-position back; reaction, media, notification and previous feature regression');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => {
   if (app) await app.close();
   clearInterval(fixtureEvents);if(websocket){for(const socket of websocket.clients)socket.terminate();websocket.close();}

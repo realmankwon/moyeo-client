@@ -1,0 +1,3 @@
+const {test}=require('node:test'),assert=require('node:assert/strict');const {fit,step}=require('../src/image-zoom.js');
+test('image fit preserves aspect and keeps small originals at 100%',()=>{assert.equal(fit(1200,800,600,600),.5);assert.equal(fit(400,1600,800,800),.5);assert.equal(fit(40,40,1000,600),1);assert.equal(fit(12000,8000,600,400),.05);assert.equal(fit(0,800,600,600),0);});
+test('zoom steps start from the actual fit percentage and stop at limits',()=>{assert.equal(step(.63,1),.75);assert.equal(step(.63,-1),.5);assert.equal(step(1,1),1.25);assert.equal(step(1.25,-1),1);assert.equal(step(5,1),5);assert.equal(step(.1,-1),.1);assert.equal(step(.05,-1),.05);assert.equal(step(.05,1),.1);});
