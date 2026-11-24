@@ -19,7 +19,7 @@ const ImageZoom = (() => {
     stage.classList.add('image-zoom-stage'); image.replaceWith(plane); plane.append(image);
     const minus = dialog.querySelector('#viewer-zoom-out'), plus = dialog.querySelector('#viewer-zoom-in');
     const original = dialog.querySelector('#viewer-actual-size'), fitButton = dialog.querySelector('#viewer-fit'), level = dialog.querySelector('#viewer-zoom-level');
-    let scale = 1, fitted = true, disposed = false;
+    let scale = 1, fitted = true, disposed = false, frame = 0, lastWidth = 0, lastHeight = 0;
     function paint() {
       const ready = image.naturalWidth > 0 && image.naturalHeight > 0;
       level.textContent = ready ? (fitted ? '화면 맞춤 · ' : '') + Math.round(scale * 100) + '%' : '불러오는 중…';
@@ -34,10 +34,12 @@ const ImageZoom = (() => {
       const area = stage.getBoundingClientRect(), previous = image.getBoundingClientRect();
       const x = previous.width ? Math.max(0, Math.min(1, (area.left + stage.clientWidth / 2 - previous.left) / previous.width)) : .5;
       const y = previous.height ? Math.max(0, Math.min(1, (area.top + stage.clientHeight / 2 - previous.top) / previous.height)) : .5;
+      stage.classList.toggle('image-fit', fitted);
+      lastWidth = area.width; lastHeight = area.height;
       if (fitted) scale = fit(image.naturalWidth, image.naturalHeight, stage.clientWidth - 2, stage.clientHeight - 2);
       const width = image.naturalWidth * scale, height = image.naturalHeight * scale;
       image.style.width = width + 'px'; image.style.height = height + 'px';
-      plane.style.width = Math.max(stage.clientWidth, width) + 'px'; plane.style.height = Math.max(stage.clientHeight, height) + 'px';
+      plane.style.width = width + 'px'; plane.style.height = height + 'px';
       if (fitted) { stage.scrollLeft = 0; stage.scrollTop = 0; }
       else { stage.scrollLeft = image.offsetLeft + x * width - stage.clientWidth / 2; stage.scrollTop = image.offsetTop + y * height - stage.clientHeight / 2; }
       paint();
@@ -56,9 +58,10 @@ const ImageZoom = (() => {
     const wheel = event => { if (!(event.ctrlKey || event.metaKey) || !event.deltaY) return; event.preventDefault(); change(event.deltaY < 0 ? 1 : -1); };
     dialog.addEventListener('keydown', keydown); stage.addEventListener('wheel', wheel, {passive:false});
     image.addEventListener('load', layout);
-    const observer = new ResizeObserver(layout); observer.observe(stage);
+    // Scrollbar content-box changes are not window resizes. Avoid a resize/layout feedback loop.
+    const observer = new ResizeObserver(() => { const rect = stage.getBoundingClientRect(); if (Math.abs(rect.width - lastWidth) < .25 && Math.abs(rect.height - lastHeight) < .25) return; cancelAnimationFrame(frame); frame = requestAnimationFrame(layout); }); observer.observe(stage, {box:'border-box'});
     paint(); if (image.complete) layout();
-    return () => { disposed = true; observer.disconnect(); image.removeEventListener('load', layout); dialog.removeEventListener('keydown', keydown); stage.removeEventListener('wheel', wheel); };
+    return () => { disposed = true; cancelAnimationFrame(frame); observer.disconnect(); image.removeEventListener('load', layout); dialog.removeEventListener('keydown', keydown); stage.removeEventListener('wheel', wheel); };
   }
   return {fit, step, controls, mount};
 })();

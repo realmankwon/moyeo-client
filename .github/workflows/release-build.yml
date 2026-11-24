@@ -32,6 +32,7 @@ jobs:
       - run: npm run test:windows
       - run: npm run test:read-sync
       - run: npm run test:profile
+      - run: npm run test:media-batch
       - name: Build Windows installer
         shell: bash
         run: |

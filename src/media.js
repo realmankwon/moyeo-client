@@ -2,7 +2,7 @@ const media = (() => {
   new ResizeObserver(()=>document.documentElement.style.setProperty('--saved-file-height',document.querySelector('#saved-file-notice').getBoundingClientRect().height+'px')).observe(document.querySelector('#saved-file-notice'));
   let files = new Map(), pending = new Map(), libraries = new Map(), failedFiles = new Set();
   let activeChannel = null, filter = 'media', query = '', sort = 'newest', viewing = null, viewerTicket = 0;
-  let animatedNodes=new Map(), zoomCleanup=()=>{};
+  let animatedNodes=new Map(), zoomCleanup=()=>{}, selectionMode=false, selectedFiles=new Set(), libraryScope=null, visibleRefs=[], batchBusy=false, batchEpoch=0;
   function keepAnimation(image,key){const old=animatedNodes.get(key);if(old&&old.src===image.src&&old!==image){image.replaceWith(old);image=old;}animatedNodes.delete(key);animatedNodes.set(key,image);while(animatedNodes.size>80)animatedNodes.delete(animatedNodes.keys().next().value);}
   const animationKey=element=>(element.closest('[data-message-id]')?.dataset.messageId||'')+':'+(element.closest('[data-reply-reference]')?.dataset.replyReference||'');
   const kind = file => FileTypes.classify(file);
@@ -80,7 +80,7 @@ const media = (() => {
       remote = [...urls].slice(0,5).map(address => { const encoded = btoa(address).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); return `<button type="button" class="inline-remote-gif" data-link="${esc(address)}" title="GIF 원본 열기"><img src="moyeo-media://${session}/giphy-url/${encoded}" alt="GIF" loading="lazy" decoding="async"></button>`; }).join('');
     }
     if (!post.file_ids?.length && !remote) return '';
-    return `<div class="attachments">${(post.file_ids || []).map(id => `<div class="attachment-slot" data-attachment="${esc(id)}"><button class="attachment-loading" data-retry-file="${esc(id)}">첨부 파일 불러오기…</button></div>`).join('')}${remote}</div>`;
+    return `<div class="attachments">${(post.file_ids || []).map(id => `<div class="attachment-slot" data-attachment="${esc(id)}"><button class="attachment-loading" data-retry-file="${esc(id)}">첨부 파일 불러오기…</button></div>`).join('')}${remote}${post.file_ids?.length>1?`<div class="attachment-actions"><button type="button" data-download-files="${esc(post.file_ids.join(','))}">첨부 ${post.file_ids.length}개 전체 저장</button><button type="button" data-select-files="${esc(post.file_ids.join(','))}">골라 저장</button></div>`:''}</div>`;
   }
   function paintAttachments() {
     document.querySelectorAll('[data-attachment]').forEach(slot => {
@@ -107,13 +107,15 @@ const media = (() => {
       for(const slot of images)if(slot.parentElement!==grid)grid.append(slot);
     });
   }
+  function bindBatchActions(){document.querySelectorAll('[data-download-files]').forEach(button=>{button.disabled=batchBusy;button.onclick=()=>batchDownload(button.dataset.downloadFiles.split(','));});document.querySelectorAll('[data-select-files]').forEach(button=>button.onclick=()=>openLibrary(button.dataset.selectFiles.split(',')));}
   async function hydrateChat(posts, channel) {
     remember(posts, channel);
+    bindBatchActions();
     const epoch = state.generation;
     await hydrate(posts.flatMap(p => p.file_ids || []));
     if (epoch !== state.generation || state.selected !== channel) return;
     const area = $('#messages'), bottom = area && area.scrollHeight - area.scrollTop - area.clientHeight < 120;
-    paintAttachments();
+    paintAttachments(); bindBatchActions();
     document.querySelectorAll('#messages .inline-remote-gif img').forEach(image=>keepAnimation(image,animationKey(image)+':'+image.src));
     if (bottom) area.scrollTop = area.scrollHeight;
     if ($('#library-dialog').open && activeChannel === channel) renderLibrary();
@@ -147,22 +149,28 @@ const media = (() => {
   function matches(file, category) {
     return category === 'all' || (category === 'media' ? ['image', 'video'].includes(kind(file)) : kind(file) === category);
   }
-  function openLibrary() {
-    activeChannel = state.selected; filter = 'media'; query = ''; sort = 'newest';
+  function openLibrary(ids=null) {
+    libraryScope=Array.isArray(ids)?new Set(ids):null;selectionMode=!!libraryScope;selectedFiles=new Set();visibleRefs=[];
+    activeChannel = state.selected; filter = libraryScope?'all':'media'; query = ''; sort = 'newest';
+    if(libraryScope)for(const id of libraryScope)if(!library(activeChannel).refs.has(id))library(activeChannel).refs.set(id,{id,create_at:files.get(id)?.create_at||0});
     remember(state.posts, activeChannel);
     if (state.demo) library(activeChannel).complete = true;
     const dialog = $('#library-dialog');
-    dialog.innerHTML = `<div class="dialog-head"><div><p class="eyebrow">SHARED IN THIS CHAT</p><h2 id="library-title">사진 · 동영상 · 파일</h2></div><button class="icon-btn" id="library-close" aria-label="모아보기 닫기">${icon('close')}</button></div><p class="dialog-intro">${esc(channelName(state.channels.find(c => c.id === activeChannel)))}에서 주고받은 자료</p><div id="library-tabs" class="library-tabs" role="group" aria-label="파일 종류"></div><div class="library-tools"><input id="file-search" placeholder="파일 이름 검색" aria-label="파일 이름 검색"><select id="file-sort" aria-label="파일 정렬"><option value="newest">최신순</option><option value="oldest">오래된순</option><option value="name">이름순</option></select></div><div id="library-content" class="library-content"></div><footer class="library-footer"><span id="library-status" role="status"></span><button class="secondary" id="library-more">이전 자료 더 불러오기</button></footer>`;
+    dialog.innerHTML = `<div class="dialog-head"><div><p class="eyebrow">SHARED IN THIS CHAT</p><h2 id="library-title">사진 · 동영상 · 파일</h2></div><button class="icon-btn" id="library-close" aria-label="모아보기 닫기">${icon('close')}</button></div><p class="dialog-intro">${libraryScope?`이 메시지에 첨부된 ${libraryScope.size}개 파일`:esc(channelName(state.channels.find(c => c.id === activeChannel)))+'에서 주고받은 자료'}</p><div id="library-tabs" class="library-tabs" role="group" aria-label="파일 종류"></div><div class="library-tools"><input id="file-search" placeholder="파일 이름 검색" aria-label="파일 이름 검색"><select id="file-sort" aria-label="파일 정렬"><option value="newest">최신순</option><option value="oldest">오래된순</option><option value="name">이름순</option></select></div><div class="library-selection-tools"><button type="button" class="secondary" id="library-select-mode">파일 선택</button><button type="button" class="text-btn" id="library-select-all" hidden>현재 목록 전체 선택</button><button type="button" class="text-btn" id="library-clear-selection" hidden>선택 해제</button><span id="library-selection-count" role="status"></span><button type="button" class="primary" id="library-save-selected" hidden>선택 파일 저장</button><button type="button" class="secondary" id="library-cancel-save" hidden>저장 취소</button></div><p id="library-batch-status" class="library-batch-status" role="status"></p><div id="library-content" class="library-content"></div><footer class="library-footer"><span id="library-status" role="status"></span><button class="secondary" id="library-more">이전 자료 더 불러오기</button></footer>`;
     $('#library-close').onclick = () => dialog.close();
     $('#file-search').oninput = event => { query = event.target.value; renderLibrary(); };
     $('#file-sort').onchange = event => { sort = event.target.value; renderLibrary(); };
     $('#library-more').onclick = () => scan(activeChannel);
+    $('#library-select-mode').onclick=()=>{selectionMode=!selectionMode;if(!selectionMode)selectedFiles.clear();renderLibrary();};
+    $('#library-select-all').onclick=()=>{for(const ref of visibleRefs)if(selectedFiles.size<500)selectedFiles.add(ref.id);updateSelection();if(visibleRefs.length>500)toast('한 번에 최대 500개까지 선택할 수 있습니다.');};
+    $('#library-clear-selection').onclick=()=>{selectedFiles.clear();updateSelection();};
+    $('#library-save-selected').onclick=()=>batchDownload([...selectedFiles]);$('#library-cancel-save').onclick=()=>cancelBatch();
     dialog.showModal(); renderLibrary();
-    hydrate(entries().map(ref => ref.id)).then(() => { renderLibrary(); scan(activeChannel); });
+    const scope=libraryScope,channel=activeChannel,epoch=state.generation;hydrate(entries(channel).filter(ref=>!scope||scope.has(ref.id)).map(ref=>ref.id)).then(()=>{if(epoch!==state.generation||scope!==libraryScope||channel!==activeChannel)return;renderLibrary();if(!scope)scan(channel);});
   }
   function renderLibrary() {
     if (!$('#library-dialog').open || !$('#library-content')) return;
-    const lib = library(activeChannel), all = entries();
+    const lib = library(activeChannel), all = entries().filter(ref=>!libraryScope||libraryScope.has(ref.id));
     const categories = [['media', '사진·동영상'], ['all', '전체'], ...Object.entries(FileTypes.labels)];
     $('#library-tabs').innerHTML = categories.map(([key, label]) => {
       const count = all.filter(ref => files.has(ref.id) && matches(files.get(ref.id), key)).length;
@@ -174,19 +182,31 @@ const media = (() => {
     });
     if (sort === 'oldest') refs.reverse();
     if (sort === 'name') refs.sort((a, b) => files.get(a.id).name.localeCompare(files.get(b.id).name, 'ko'));
-    $('#library-content').className = `library-content ${['media', 'image', 'video'].includes(filter) ? 'media-grid' : 'file-list'}`;
-    $('#library-content').innerHTML = refs.map(ref => {
-      const file = files.get(ref.id), type = kind(file), visual = ['image', 'video'].includes(type);
-      return `<button class="library-item ${visual ? 'visual' : ''}" data-library-file="${esc(file.id)}" aria-label="${esc(file.name)} 열기"><span class="library-thumb">${thumbnail(file, true)}</span><span class="library-item-copy"><strong>${esc(file.name)}</strong><small>${esc(FileTypes.labels[type])} · ${size(file.size)} · ${new Date(ref.create_at).toLocaleDateString('ko-KR')}</small></span></button>`;
-    }).join('') || `<p class="empty">${lib.loading ? '대화에서 자료를 찾고 있어요…' : '해당하는 자료가 없어요.'}${!lib.complete ? '<br>이전 자료를 더 불러올 수 있습니다.' : ''}</p>`;
-    bindThumbnails($('#library-content'));
-    document.querySelectorAll('[data-library-file]').forEach(button => button.onclick = () => openViewer(button.dataset.libraryFile, activeChannel));
+    visibleRefs=refs;const content=$('#library-content'),top=content.scrollTop,focused=content.querySelector(':focus'),focusId=focused?.dataset.selectFile||focused?.dataset.libraryFile;
+    content.className='library-content '+(selectionMode||['media','image','video'].includes(filter)?'media-grid':'file-list');
+    content.innerHTML=refs.map(ref=>{const file=files.get(ref.id),type=kind(file),visual=['image','video'].includes(type),selected=selectedFiles.has(file.id);return `<div class="library-card ${selected?'is-file-selected':''}"><button type="button" class="library-item ${visual?'visual':''}" data-library-file="${esc(file.id)}" aria-label="${esc(file.name)} ${selectionMode?'선택':'열기'}" ${selectionMode?'aria-pressed="'+selected+'"':''}><span class="library-thumb">${thumbnail(file,true)}</span><span class="library-item-copy"><strong>${esc(file.name)}</strong><small>${esc(FileTypes.labels[type])} · ${size(file.size)} · ${new Date(ref.create_at).toLocaleDateString('ko-KR')}</small></span></button>${selectionMode?`<label class="library-file-check"><input type="checkbox" data-select-file="${esc(file.id)}" aria-label="${esc(file.name)} 선택" ${selected?'checked':''}>선택</label><button type="button" class="library-preview" data-library-preview="${esc(file.id)}" aria-label="${esc(file.name)} 미리보기">미리보기</button>`:''}</div>`;}).join('')||`<p class="empty">${lib.loading?'대화에서 자료를 찾고 있어요…':'해당하는 자료가 없어요.'}</p>`;
+    bindThumbnails(content);content.scrollTop=top;if(focusId)content.querySelector('[data-select-file="'+focusId+'"],[data-library-file="'+focusId+'"]')?.focus({preventScroll:true});
+    const toggle=id=>{if(selectedFiles.has(id))selectedFiles.delete(id);else if(selectedFiles.size<500)selectedFiles.add(id);else toast('한 번에 최대 500개까지 선택할 수 있습니다.');updateSelection();};
+    content.querySelectorAll('[data-library-file]').forEach(button=>button.onclick=()=>selectionMode?toggle(button.dataset.libraryFile):openViewer(button.dataset.libraryFile,activeChannel));
+    content.querySelectorAll('[data-select-file]').forEach(input=>input.onchange=()=>toggle(input.dataset.selectFile));content.querySelectorAll('[data-library-preview]').forEach(button=>button.onclick=()=>openViewer(button.dataset.libraryPreview,activeChannel));updateSelection();
     const unavailable = all.filter(ref => failedFiles.has(ref.id)).length, checking = all.filter(ref => !files.has(ref.id) && !failedFiles.has(ref.id)).length;
     $('#library-status').textContent = lib.error || `${all.length}개 자료${unavailable ? ` · ${unavailable}개 정보 조회 실패` : ''}${checking ? ` · ${checking}개 정보 확인 중` : ''} · ${lib.complete ? '전체 대화 확인 완료' : `${lib.checked}개 메시지 확인${lib.loading ? ' 중…' : ''}`}`;
-    $('#library-more').hidden = lib.complete;
+    $('#library-more').hidden = !!libraryScope||lib.complete;
     $('#library-more').disabled = lib.loading;
     $('#library-more').textContent = lib.loading ? '이전 자료 불러오는 중…' : lib.error ? '다시 시도' : '이전 자료 더 불러오기';
   }
+  function updateSelection(){if(!$('#library-dialog').open||!$('#library-selection-count'))return;$('#library-select-mode').textContent=selectionMode?'선택 끝내기':'파일 선택';for(const id of ['library-select-all','library-clear-selection','library-save-selected'])$('#'+id).hidden=!selectionMode;$('#library-selection-count').textContent=selectionMode?selectedFiles.size+'개 선택':'';$('#library-save-selected').textContent='선택 '+selectedFiles.size+'개 저장';$('#library-save-selected').disabled=batchBusy||!selectedFiles.size;$('#library-cancel-save').hidden=!batchBusy;
+    for(const input of $('#library-content').querySelectorAll('[data-select-file]')){const checked=selectedFiles.has(input.dataset.selectFile);input.checked=checked;const card=input.closest('.library-card');card.classList.toggle('is-file-selected',checked);card.querySelector('[data-library-file]').setAttribute('aria-pressed',String(checked));}}
+  function batchProgress(value){if(!batchBusy||batchEpoch!==state.generation)return;const label=value.completed+'/'+value.total+'개 처리'+(value.failed?' · '+value.failed+'개 실패':'')+' · '+(value.name||'저장할 폴더를 선택해 주세요.');if($('#library-batch-status'))$('#library-batch-status').textContent=label;const notice=$('#saved-file-notice');if(notice.dataset.batchJob==='1'){notice.innerHTML='<div><strong>파일 저장 중 · '+value.completed+' / '+value.total+'</strong><small>'+esc(value.name||'저장할 폴더를 선택해 주세요.')+'</small></div><button type="button" class="secondary" id="batch-notice-cancel">저장 취소</button>';notice.hidden=false;$('#batch-notice-cancel').onclick=()=>cancelBatch();}}
+  async function cancelBatch(){if(!batchBusy)return;await api.cancelDownloadFiles().catch(()=>{});if($('#library-batch-status'))$('#library-batch-status').textContent='저장을 취소하고 있습니다…';}
+  async function batchDownload(ids){if(batchBusy){toast('파일을 저장하고 있습니다.');return;}const unique=[...new Set(ids)];if(!unique.length)return;batchBusy=true;batchEpoch=state.generation;const epoch=batchEpoch,notice=$('#saved-file-notice');notice.dataset.batchJob='1';batchProgress({completed:0,total:unique.length});bindBatchActions();updateSelection();
+    try{const result=await api.downloadFiles(unique);if(epoch!==state.generation)return;delete notice.dataset.batchJob;const completed=new Set(result.saved.map(file=>file.id));for(const id of completed)selectedFiles.delete(id);const label=result.saved.length+'개 저장'+(result.failed.length?' · '+result.failed.length+'개 실패':'')+(result.canceled?' · 취소됨':'');if($('#library-batch-status'))$('#library-batch-status').textContent=label;toast(label);
+      if(result.saved.length)showSaved({name:result.saved.length+'개 파일',path:result.path,savedId:result.savedId,canOpen:false},result.failed.slice(0,3).map(file=>file.name+': '+file.error).join(' · ')+(result.failed.length>3?' · 외 '+(result.failed.length-3)+'개':''));else{notice.hidden=true;notice.innerHTML='';}
+      if(result.failed.length){notice.hidden=false;notice.insertAdjacentHTML('beforeend','<button type="button" class="secondary" id="batch-retry-failed">실패한 '+result.failed.length+'개 다시 저장</button>');$('#batch-retry-failed').onclick=()=>batchDownload(result.failed.map(file=>file.id));if(!result.saved.length)notice.insertAdjacentHTML('afterbegin','<div><strong>'+esc(label)+'</strong><small>'+esc(result.failed.slice(0,3).map(file=>file.name+': '+file.error).join(' · ')+(result.failed.length>3?' · 외 '+(result.failed.length-3)+'개':''))+'</small></div>');}
+    }catch(error){if(epoch===state.generation){delete notice.dataset.batchJob;notice.hidden=true;toast(errorText(error));if($('#library-batch-status'))$('#library-batch-status').textContent=errorText(error);}}
+    finally{if(epoch===state.generation){batchBusy=false;bindBatchActions();updateSelection();}}
+  }
+  window.messenger?.onBatchDownload(batchProgress);
   function sequence() {
     if (!viewing) return [];
     return entries(viewing.channel).filter(ref => files.has(ref.id) && matches(files.get(ref.id), viewing.category));
@@ -265,7 +285,7 @@ const media = (() => {
   }
   function showSaved(result,error='') {
     const markup='<div><strong>'+esc(result.name)+' 저장 완료</strong><small title="'+esc(result.path||'')+'">'+esc(result.path||'')+'</small><p class="saved-file-status" role="status">'+esc(error)+'</p></div>'+(result.canOpen?'<button type="button" class="secondary" data-saved-open>파일 열기</button>':'')+'<button type="button" class="secondary" data-saved-folder>폴더 열기</button><button type="button" class="icon-btn" data-saved-close aria-label="저장 알림 닫기">×</button>';
-    const notice=$('#saved-file-notice');notice.innerHTML=markup;notice.hidden=false;
+    const notice=$('#saved-file-notice');delete notice.dataset.batchJob;notice.innerHTML=markup;notice.hidden=false;
     const hosts=[notice],owner=$('#viewer-dialog').open?$('#viewer-dialog'):$('#search-dialog').open?$('#search-dialog'):null;if(owner){$('#viewer-saved')?.remove();owner.querySelector('.viewer-header,.dialog-head').insertAdjacentHTML('afterend','<div class="viewer-saved-actions" id="viewer-saved"></div>');const local=$('#viewer-saved');local.innerHTML=markup;hosts.push(local);}
     for(const host of hosts){const action=async(name,button)=>{button.disabled=true;try{await api[name](result.savedId);host.querySelector('.saved-file-status').textContent='';}catch(error){host.querySelector('.saved-file-status').textContent=errorText(error);}finally{button.disabled=false;}};host.querySelector('[data-saved-open]')?.addEventListener('click',event=>action('openSavedFile',event.currentTarget));host.querySelector('[data-saved-folder]').onclick=event=>action('showSavedFile',event.currentTarget);host.querySelector('[data-saved-close]').onclick=()=>{notice.hidden=true;$('#viewer-saved')?.remove();};}
   }
@@ -277,7 +297,7 @@ const media = (() => {
     finally{if(epoch===state.generation)buttons.forEach(button=>button.disabled=false);}
   }
   function reset() {
-    animatedNodes.clear();documentPreview.stop();$('#saved-file-notice').hidden=true;$('#saved-file-notice').innerHTML='';
+    batchBusy=false;batchEpoch=0;selectedFiles.clear();selectionMode=false;libraryScope=null;delete $('#saved-file-notice').dataset.batchJob;animatedNodes.clear();documentPreview.stop();$('#saved-file-notice').hidden=true;$('#saved-file-notice').innerHTML='';
     $('#viewer-dialog').close(); $('#library-dialog').close();
     files = new Map(); pending = new Map(); libraries = new Map(); failedFiles = new Set(); viewing = null; activeChannel = null;
   }

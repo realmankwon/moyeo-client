@@ -20,11 +20,11 @@ function normalizeServer(value) {
 class MattermostClient {
   constructor(fetcher = fetch) { this.fetcher = fetcher; this.clear(); }
   clear() { this.server = ''; this.token = ''; this.me = null; this.ownedSession = false; this.mediaKey = randomUUID(); }
-  async request(path, { method = 'GET', body } = {}) {
+  async request(path, { method = 'GET', body, signal } = {}) {
     if (!this.server) throw new Error('서버에 먼저 연결해 주세요.');
     let response;
     try { response = await this.fetcher(`${this.server}/api/v4${path}`, {
-      method, redirect: 'error', signal: AbortSignal.timeout(20000),
+      method, redirect: 'error', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20000)]) : AbortSignal.timeout(20000),
       headers: { 'Content-Type': 'application/json', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}) },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {})
     }); } catch (error) {
@@ -111,8 +111,8 @@ class MattermostClient {
     const data=(await this.request('/users/autocomplete?'+query)).data;
     return {users:(data.users||[]).map(user=>this.withAvatar(user)),out_of_channel:(data.out_of_channel||[]).map(user=>this.withAvatar(user))};
   }
-  async fileInfo(id) {
-    const info = (await this.request(`/files/${validId(id)}/info`)).data;
+  async fileInfo(id, signal) {
+    const info = (await this.request(`/files/${validId(id)}/info`, {signal})).data;
     return { ...info, id, url: `moyeo-media://${this.mediaKey}/${id}/original`, thumbnail: `moyeo-media://${this.mediaKey}/${id}/thumbnail`, preview: `moyeo-media://${this.mediaKey}/${id}/preview` };
   }
   async fileResponse(id, variant = 'original', range, signal) {

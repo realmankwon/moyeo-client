@@ -11,7 +11,7 @@ const { isText, ext, previewType, canOpen } = require('../src/file-types.js');
 
 function registerFiles(client, handle, getWindow, giphy) {
   const icons=new FileIcons(app);
-  const savedFiles=new Map();
+  const savedFiles=new Map(),batchJobs=new Map();
   handle('copyFileImage',id=>require('./image-clipboard.cjs').copyFileImage(client,id,require('electron')));
   protocol.handle('moyeo-assets',request=>{
     const url=new URL(request.url);
@@ -30,9 +30,9 @@ function registerFiles(client, handle, getWindow, giphy) {
       if(epoch!==client.mediaKey)throw Error('서버 연결이 변경되었습니다.');return new Uint8Array(Buffer.concat(chunks));
     }finally{await reader.cancel();}
   });
-  async function saved(token){const entry=savedFiles.get(token);if(!entry||entry.epoch!==client.mediaKey)throw Error('다시 파일을 저장한 뒤 열어 주세요.');try{if(!(await fsp.stat(entry.path)).isFile())throw Error();}catch{throw Error('저장한 파일이 이동되었거나 삭제되었습니다. 다시 저장해 주세요.');}return entry;}
+  async function saved(token){const entry=savedFiles.get(token);if(!entry||entry.epoch!==client.mediaKey)throw Error('다시 파일을 저장한 뒤 열어 주세요.');try{const stat=await fsp.stat(entry.path);if(entry.directory?!stat.isDirectory():!stat.isFile())throw Error();}catch{throw Error('저장한 파일이 이동되었거나 삭제되었습니다. 다시 저장해 주세요.');}return entry;}
   handle('openSavedFile',async token=>{const entry=await saved(token);if(!entry.canOpen)throw Error('이 파일은 저장 폴더에서 확인해 주세요.');const error=await shell.openPath(entry.path);if(error)throw Error('파일을 열 수 없습니다. 이 형식의 기본 앱을 확인하거나 저장 폴더에서 열어 주세요.');return true;});
-  handle('showSavedFile',async token=>{const entry=await saved(token);shell.showItemInFolder(entry.path);return true;});
+  handle('showSavedFile',async token=>{const entry=await saved(token);if(entry.directory){const error=await shell.openPath(entry.path);if(error)throw Error('저장 폴더를 열 수 없습니다.');}else shell.showItemInFolder(entry.path);return true;});
   protocol.handle('moyeo-media', async request => {
     try {
       const url = new URL(request.url);
@@ -69,6 +69,15 @@ function registerFiles(client, handle, getWindow, giphy) {
       }
       return Buffer.concat(chunks).toString('utf8');
     } finally { await reader.cancel(); }
+  });
+  handle('cancelDownloadFiles',()=>{const owner=getWindow(),job=batchJobs.get(owner.webContents.id);if(job)job.abort();return !!job;});
+  handle('downloadFiles',async ids=>{
+    if(!client.me)throw Error('먼저 로그인해 주세요.');if(!Array.isArray(ids)||!ids.length||ids.length>500)throw Error('한 번에 1~500개 파일을 선택해 주세요.');ids.forEach(require('./client.cjs').validId);
+    const owner=getWindow(),windowId=owner.webContents.id,epoch=client.mediaKey;if(batchJobs.has(windowId))throw Error('이 창에서 파일을 저장하고 있습니다.');const controller=new AbortController();batchJobs.set(windowId,controller);const abort=()=>controller.abort();owner.once('closed',abort);const watch=setInterval(()=>{if(epoch!==client.mediaKey||owner.isDestroyed())abort();},200);watch.unref?.();
+    try{const choice=await dialog.showOpenDialog(owner,{title:'첨부 파일을 저장할 폴더 선택',properties:['openDirectory','createDirectory']});if(choice.canceled||!choice.filePaths[0]||controller.signal.aborted)return {canceled:true,saved:[],failed:[],total:ids.length};const folder=choice.filePaths[0];if(!(await fsp.stat(folder)).isDirectory())throw Error('저장할 폴더를 확인해 주세요.');
+      const result=await require('./batch-download.cjs').saveBatch(client,ids,folder,{signal:controller.signal,isCurrent:()=>epoch===client.mediaKey&&!owner.isDestroyed(),onProgress:value=>{if(!owner.isDestroyed()&&!owner.webContents.isDestroyed())owner.webContents.send('files:batch-progress',value);}});
+      const savedId=randomUUID();savedFiles.set(savedId,{path:folder,epoch,directory:true,canOpen:false});while(savedFiles.size>100)savedFiles.delete(savedFiles.keys().next().value);return {...result,path:folder,savedId};
+    }finally{clearInterval(watch);owner.removeListener('closed',abort);if(batchJobs.get(windowId)===controller)batchJobs.delete(windowId);}
   });
   handle('downloadFile', async id => {
     const session = client.mediaKey;
