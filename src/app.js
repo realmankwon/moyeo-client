@@ -500,6 +500,7 @@ async function poll() {
     const activeChannels=await api.getActiveChannels();
     if(epoch!==state.generation)return;
     incoming.receive(channels, previousChannels, windowActive,activeChannels);
+    incoming.reconcile();
     renderChannelList();
     if (id) {
       const result = await api.posts(id);

@@ -14,6 +14,12 @@ class TypingService {
  if(message.event==='hello'){this.connected=true;this.events({type:'connected',reconnected:everConnected});everConnected=true;return;}
  const data=message.data||{};
  if(message.event==='typing'){try{validId(data.user_id);validId(message.broadcast?.channel_id||data.channel_id);}catch{return;}if(data.user_id!==this.client.me?.id)this.notify({user_id:data.user_id,channel_id:message.broadcast?.channel_id||data.channel_id,parent_id:data.parent_id||''});return;}
+ if(['channel_viewed','multiple_channels_viewed'].includes(message.event)){
+  if(message.broadcast?.user_id&&message.broadcast.user_id!==this.client.me?.id)return;
+  if(data.user_id&&data.user_id!==this.client.me?.id)return;
+  try{if(message.event==='channel_viewed'){validId(data.channel_id);this.events({type:'channel_viewed',channel:data.channel_id});}
+  else{let values=data.channel_times;if(typeof values==='string'&&values.length<=1000000)values=JSON.parse(values);if(!values||typeof values!=='object'||Array.isArray(values))return;const times={};for(const [id,time]of Object.entries(values).slice(0,10000)){try{validId(id);}catch{continue;}if(Number.isSafeInteger(time)&&time>=0)times[id]=time;}if(Object.keys(times).length)this.events({type:'channels_viewed',times});}}catch{/* Ignore malformed read events. */}return;
+ }
  try{if(['posted','post_edited','post_deleted'].includes(message.event)){const post=typeof data.post==='string'?JSON.parse(data.post):data.post;validId(post.id);validId(post.channel_id);this.events({type:message.event,post});}
  else if(['reaction_added','reaction_removed'].includes(message.event)){const reaction=typeof data.reaction==='string'?JSON.parse(data.reaction):data.reaction;validId(reaction.post_id);validId(reaction.user_id);if(typeof reaction.emoji_name==='string')this.events({type:message.event,reaction});}
  else if(['channel_created','channel_updated','channel_deleted','user_added','user_removed','added_to_team','leave_team','preferences_changed','user_updated','config_changed'].includes(message.event))this.events({type:'refresh',reason:message.event});}catch{/* Ignore malformed events. */}

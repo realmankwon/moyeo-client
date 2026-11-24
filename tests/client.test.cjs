@@ -58,3 +58,19 @@ test('personal tokens are not revoked on local logout, failures clear credential
   await assert.rejects(failed.connect({ server: 'https://example.com', token: 'bad' }), /로그인 실패/);
   assert.equal(failed.token, '');
 });
+
+test('read snapshots query own membership with bounded concurrency and keep unknown/error states',async t=>{
+ const ids=Array.from({length:9},(_,index)=>String(index+1).padStart(26,'0'));let active=0,max=0,release,hold=false;const calls=[];
+ const server=http.createServer(async(req,res)=>{
+  calls.push({url:req.url,method:req.method,auth:req.headers.authorization});res.setHeader('Content-Type','application/json');
+  if(req.url==='/api/v4/users/me')return res.end(JSON.stringify({id:me}));
+  const id=req.url.split('/')[4];active++;max=Math.max(max,active);await new Promise(r=>setTimeout(r,5));
+  if(hold)await new Promise(r=>{release=r;});active--;
+  if(id===ids[6]){res.statusCode=403;return res.end('{"message":"forbidden"}');}
+  res.end(JSON.stringify({channel_id:id,user_id:id===ids[7]?'z'.repeat(26):me,last_viewed_at:id===ids[8]?'invalid':100}));
+ });await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>{release?.();server.closeAllConnections();server.close();});
+ const client=new MattermostClient();await client.connect({server:`http://127.0.0.1:${server.address().port}`,token:'read-fixture'});
+ const times=await client.channelReadStates([...ids,ids[0]]);assert.deepEqual(times,Object.fromEntries(ids.slice(0,6).map(id=>[id,100])));assert.ok(max<=4);assert.equal(calls.length,10);assert.ok(calls.every(call=>call.method==='GET'&&call.auth==='Bearer read-fixture'));
+ await assert.rejects(client.channelReadStates(['../bad']),/식별자/);await assert.rejects(client.channelReadStates(Array(201).fill(ids[0])),/범위/);
+ hold=true;const pending=client.channelReadStates([ids[0]]);while(!release)await new Promise(r=>setTimeout(r,5));client.clear();release();await assert.rejects(pending,/계정이 변경/);
+});

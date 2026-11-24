@@ -209,6 +209,16 @@ class MattermostClient {
   async direct(userId) {
     return (await this.request('/channels/direct', { method: 'POST', body: [this.me.id, validId(userId)] })).data;
   }
+  async channelReadStates(ids) {
+    if(!this.me)throw new Error('먼저 로그인해 주세요.');
+    if(!Array.isArray(ids)||ids.length>200)throw new Error('읽음 상태 요청 범위를 초과했습니다.');
+    ids.forEach(validId);const unique=[...new Set(ids)],epoch=this.mediaKey,user=this.me.id,times={};
+    for(let index=0;index<unique.length;index+=4){
+      if(epoch!==this.mediaKey)throw new Error('계정이 변경되었습니다.');
+      await Promise.all(unique.slice(index,index+4).map(async id=>{try{const {data}=await this.request('/channels/'+id+'/members/me');if(data.channel_id===id&&data.user_id===user&&Number.isSafeInteger(data.last_viewed_at)&&data.last_viewed_at>=0)times[id]=data.last_viewed_at;}catch{/* A failed/forbidden lookup must not clear unread messages. */}}));
+    }
+    if(epoch!==this.mediaKey)throw new Error('계정이 변경되었습니다.');return times;
+  }
   async view(id) {
     return (await this.request('/channels/members/me/view', { method: 'POST', body: { channel_id: validId(id) } })).data;
   }

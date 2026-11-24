@@ -173,7 +173,8 @@ if (singleInstance) app.whenReady().then(async () => {
   registerFiles(client, handle, () => chatWindows.owner()||win, giphy);
   const resetComposer = registerComposer(client, handle, () => chatWindows.owner()||win, giphy);
   handle('disconnect', async () => {incomingReady=false;desktop.resetActivation(); chatWindows.closeFloating();systemConsole.close(); typing.stop(); await sessions.clear(); resetComposer(); giphy.reset(); const connected=!!client.me;try{return await client.disconnect();}finally{if(connected)chatWindows.broadcast('account:cleared');} });
-  handle('view',async channel=>{const result=await client.view(channel);chatWindows.read(channel);return result;});
+  handle('channelReadStates',ids=>client.channelReadStates(ids));
+  handle('view',async channel=>{const epoch=client.mediaKey,result=await client.view(channel);if(epoch!==client.mediaKey)throw Error('계정이 변경되었습니다.');if(result.last_viewed_at_times&&typeof result.last_viewed_at_times==='object')chatWindows.broadcast('chat:realtime',{type:'channels_viewed',times:result.last_viewed_at_times});else chatWindows.read(channel);return result;});
   handle('send',async(...args)=>{const result=await client.send(...args);chatWindows.broadcast('chat:posted',result);return result;});
   for (const method of ['channels', 'users', 'posts', 'searchUsers', 'direct', 'teams', 'favorites', 'setFavorite']) handle(method, (...args) => client[method](...args));
   handle('userProfile', async id => {

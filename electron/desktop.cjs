@@ -61,7 +61,7 @@ class DesktopService {
       notice.on('click', () => this.show()); notice.once('failed', balloon); notice.show();
     } catch { balloon(); }
   }
-  read(channel) { this.rooms.delete(channel); this.notices.get(channel)?.close(); this.notices.delete(channel); this.refresh(); }
+  read(channel) { if(this.balloon?.channel===channel){if(process.platform==='win32')this.tray.removeBalloon?.();this.balloon=null;}this.rooms.delete(channel); this.notices.get(channel)?.close(); this.notices.delete(channel); this.refresh(); }
   setCount(count) { this.count = count; if (!count) { this.rooms.clear(); for (const notice of this.notices.values()) notice.close(); this.notices.clear(); this.win.flashFrame(false); } this.refresh(); }
 }
 module.exports = { DesktopService };

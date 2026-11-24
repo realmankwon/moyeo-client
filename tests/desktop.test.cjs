@@ -23,6 +23,7 @@ test('close hides to tray, notification restores its room, sound is controllable
   desktop.lastSound = 0; desktop.notify({ channel: 'b'.repeat(26), title: '새 대화' }, epoch);
   assert.equal(sent.filter(([event]) => event === 'incoming:sound').length, sounds);
   desktop.setCount(2); assert.match(desktop.tray.tooltip, /2개 대화방/);
+  desktop.balloon={channel:'b'.repeat(26),epoch};let removedBalloon=0;desktop.tray.removeBalloon=()=>removedBalloon++;desktop.read('b'.repeat(26));assert.equal(desktop.balloon,null);assert.equal(desktop.rooms.has('b'.repeat(26)),false);assert.equal(removedBalloon,process.platform==='win32'?1:0);
   const updateCount = notices.length;
   desktop.notifyUpdate({ phase: 'available', nextVersion: '0.15.0' });
   desktop.notifyUpdate({ phase: 'available', nextVersion: '0.15.0' });

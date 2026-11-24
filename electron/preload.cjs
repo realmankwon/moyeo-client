@@ -24,7 +24,7 @@ api.onAccountProfile=listener=>{const handler=(_event,user)=>listener(user);ipcR
 api.onAccountLogout=listener=>{const handler=()=>listener();ipcRenderer.on('account:logout',handler);return()=>ipcRenderer.removeListener('account:logout',handler);};
 api.sendTyping = (channel,parent) => ipcRenderer.invoke('sendTyping',channel,parent);
 api.onTyping = listener => { const handler=(_event,data)=>listener(data);ipcRenderer.on('chat:typing',handler);return()=>ipcRenderer.removeListener('chat:typing',handler); };
-for (const name of ['connect', 'channels', 'users', 'posts', 'send', 'searchUsers', 'direct', 'view', 'disconnect', 'fileInfo', 'fileText', 'downloadFile', 'teams', 'favorites', 'setFavorite']) api[name] = (...args) => ipcRenderer.invoke(name, ...args);
+for (const name of ['channelReadStates', 'connect', 'channels', 'users', 'posts', 'send', 'searchUsers', 'direct', 'view', 'disconnect', 'fileInfo', 'fileText', 'downloadFile', 'teams', 'favorites', 'setFavorite']) api[name] = (...args) => ipcRenderer.invoke(name, ...args);
 api.getSettings = () => ipcRenderer.invoke('settings:get');
 api.saveSettings = data => ipcRenderer.invoke('settings:save', data);
 api.pickImage = key => ipcRenderer.invoke('settings:image', key);
