@@ -135,7 +135,7 @@ const composer = (() => {
     const area = $('#emoji-results'); if (!area) return;
     const customItems = Object.values(custom).map(item => ({ emoji: `:${item.name}:`, name: item.name, category: 'custom', image_url: item.image_url, keywords: '서버 사용자' }));
     const all = [...EmojiData, ...customItems];
-    const recentItems = recents.map(value => all.find(item => item.emoji === value)).filter(Boolean);
+    const recentItems = recentOptions();
     let items = emojiQuery ? all.filter(item => `${item.name} ${item.keywords} ${item.emoji}`.toLowerCase().includes(emojiQuery.toLowerCase().replace(/^:|:$/g, ''))) : ['recent','favorites'].includes(emojiCategory) ? (emojiCategory === 'recent' ? recentItems : personal.get('emojiFavorites').map(value => all.find(item => item.emoji === value)).filter(Boolean)) : all.filter(item => item.category === emojiCategory);
     if (emojiQuery) { const exact = emojiQuery.toLowerCase().replace(/^:|:$/g, ''); items.sort((a, b) => Number(b.name.toLowerCase() === exact) - Number(a.name.toLowerCase() === exact)); }
     const title = emojiQuery ? '검색 결과' : emojiCategory === 'recent' ? '최근 사용' : emojiCategory === 'favorites' ? '즐겨찾기' : emojiCategory === 'custom' ? '서버 이모지' : '이모지';
@@ -238,7 +238,14 @@ const composer = (() => {
     catch (error) { if (epoch === state.generation) toast('최근 사용 기록을 저장하지 못했습니다. ' + cleanError(error)); }
   }
   function rememberReaction(name) { return rememberEmoji(Object.hasOwn(custom, name) ? ':' + name + ':' : aliases[name] || ':' + name + ':'); }
-  function recentOptions() { const options = reactionOptions(); return recents.map(value => options.find(item => item.emoji === value)).filter(Boolean); }
+  function recentOptions() {
+    const options = reactionOptions();
+    return recents.map(value => {
+      const item = options.find(item => item.emoji === value); if (item) return item;
+      const alias = Object.entries(aliases).find(([name, emoji]) => emoji === value && /^[a-zA-Z0-9_+-]{1,64}$/.test(name));
+      return alias && { name: alias[0], emoji: value, category: 'standard', keywords: '' };
+    }).filter(Boolean);
+  }
   function reactionOptions() { return [...EmojiData, ...Object.values(custom).map(item => ({ name: item.name, emoji: `:${item.name}:`, image_url: item.image_url, category: 'custom', keywords: '서버 사용자' }))]; }
   function reactionEmoji(name) { const fallback = { thumbsup: '👍', thumbsdown: '👎', eyes: '👀' }; return Object.hasOwn(custom, name) ? `<img class="reaction-custom" src="${esc(custom[name].image_url)}" alt=":${esc(name)}:">` : esc(Object.hasOwn(aliases, name) ? aliases[name] : Object.hasOwn(fallback, name) ? fallback[name] : `:${name}:`); }
   return { mount, send, format, reset, load, loadEmojiNames, queueGif, reactionOptions, reactionEmoji, recentOptions, rememberReaction, chooseGifFile: () => { $('#emoji-panel').hidden = true; choose({ gifOnly: true }); } };
