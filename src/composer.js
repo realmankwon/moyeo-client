@@ -12,7 +12,9 @@ const composer = (() => {
     if (epoch !== state.generation) return;
     if (results[0].status === 'fulfilled') { results[0].value.forEach(item => { custom[item.name] = item; }); hasMoreEmoji = results[0].value.length === 200; }
     else { emojiError = '서버 이모지를 불러오지 못했습니다. 기본 이모지를 사용할 수 있습니다.'; loaded = false; }
-    if (results[1].status === 'fulfilled') recents = results[1].value;
+    if (results[1].status === 'fulfilled') recents = [...new Set([...recents, ...results[1].value])].slice(0, 30);
+    await loadEmojiNames(recents.map(value => /^:([a-zA-Z0-9_+-]{1,64}):$/.exec(value)?.[1]).filter(Boolean));
+    if (epoch !== state.generation) return;
     document.querySelectorAll('.bubble[data-message]').forEach(el => { el.innerHTML = format(el.dataset.message); });
     messageActions.hydrateReferences().catch(() => {});
     if ($('#emoji-panel') && !$('#emoji-panel').hidden) renderPicker();
@@ -128,7 +130,8 @@ const composer = (() => {
     if (emojiQuery) { const exact = emojiQuery.toLowerCase().replace(/^:|:$/g, ''); items.sort((a, b) => Number(b.name.toLowerCase() === exact) - Number(a.name.toLowerCase() === exact)); }
     const title = emojiQuery ? '검색 결과' : emojiCategory === 'recent' ? '최근 사용' : emojiCategory === 'favorites' ? '즐겨찾기' : emojiCategory === 'custom' ? '서버 이모지' : '이모지';
     const sections = [];
-    if (!emojiQuery && !['recent','favorites','custom'].includes(emojiCategory) && recentItems.length) sections.push({ key: 'recent', title: '최근 사용', items: recentItems });
+    const leadingRecents = emojiCategory === 'custom' ? recentItems.filter(item => item.category === 'custom') : recentItems;
+    if (!emojiQuery && !['recent','favorites'].includes(emojiCategory) && leadingRecents.length) sections.push({ key: 'recent', title: '최근 사용', items: leadingRecents });
     sections.push({ key: emojiQuery ? 'search' : emojiCategory, title, items });
     let offset = 0;
     const markup = sections.map(section => {

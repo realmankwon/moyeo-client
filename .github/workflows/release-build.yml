@@ -33,6 +33,7 @@ jobs:
       - run: npm run test:read-sync
       - run: npm run test:profile
       - run: npm run test:media-batch
+      - run: npm run test:emoji-recents
       - name: Build Windows installer
         shell: bash
         run: |
