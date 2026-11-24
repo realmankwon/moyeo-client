@@ -57,6 +57,8 @@ const reactions = (() => {
         try { const rows = await api.reactions(id); if (epoch !== state.generation) return false; store(id, rows); await hydrateUsers(rows.map(r => r.user_id)).catch(() => {}); }
         catch { toast('반응은 저장했지만 목록을 갱신하지 못했습니다. 반응한 사람에서 다시 확인해 주세요.'); }
       }
+      if (enabled) await composer.rememberReaction(name);
+      if (epoch !== state.generation) return false;
       return true;
     } catch (error) { if (epoch === state.generation) toast(`반응을 저장하지 못했습니다. ${errorText(error)}`); return false; }
     finally { if (epoch === state.generation) { busy.delete(id); paint(id); } }
@@ -65,7 +67,7 @@ const reactions = (() => {
     if (!postsById.has(id) && !state.posts.some(post => post.id === id)) return;
     picker = { id, query: '', category: 'all' };
     const dialog = $('#reaction-picker-dialog');
-    dialog.innerHTML = `<div class="dialog-head"><h2 id="reaction-picker-title">이모지로 반응하기</h2><button class="icon-btn" id="reaction-picker-close" aria-label="반응 선택기 닫기">${icon('close')}</button></div><input id="reaction-search" class="reaction-search" placeholder="이모지 검색 (좋아요, heart, 웃음…)" aria-label="반응 이모지 검색"><div class="reaction-picker-tabs"><button data-reaction-category="all">전체</button><button data-reaction-category="favorite">★ 즐겨찾기</button><button data-reaction-category="custom">서버 이모지</button></div><div id="reaction-options" class="emoji-grid reaction-options"></div><p class="profile-note">이미 누른 반응을 다시 선택하면 취소됩니다.</p>`;
+    dialog.innerHTML = `<div class="dialog-head"><h2 id="reaction-picker-title">이모지로 반응하기</h2><button class="icon-btn" id="reaction-picker-close" aria-label="반응 선택기 닫기">${icon('close')}</button></div><input id="reaction-search" class="reaction-search" placeholder="이모지 검색 (좋아요, heart, 웃음…)" aria-label="반응 이모지 검색"><div class="reaction-picker-tabs"><button data-reaction-category="recent">🕘 최근 사용</button><button data-reaction-category="all">전체</button><button data-reaction-category="favorite">★ 즐겨찾기</button><button data-reaction-category="custom">서버 이모지</button></div><div id="reaction-options" class="emoji-grid reaction-options"></div><p class="profile-note">이미 누른 반응을 다시 선택하면 취소됩니다.</p>`;
     $('#reaction-picker-close').onclick = () => dialog.close();
     $('#reaction-search').oninput = event => { picker.query = event.target.value; paintPicker(); };
     $('#reaction-search').onkeydown = event => { if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); $('#reaction-options button')?.click(); } };
@@ -76,11 +78,18 @@ const reactions = (() => {
   function paintPicker() {
     if (!picker || !$('#reaction-options')) return;
     const query = picker.query.toLowerCase().replace(/^:|:$/g, ''), favorites = personal.get('emojiFavorites');
-    let items = composer.reactionOptions().filter(item => (picker.category === 'all' || (picker.category === 'custom' ? item.category === 'custom' : favorites.includes(item.emoji))) && `${item.name} ${item.keywords || ''} ${item.emoji}`.toLowerCase().includes(query));
+    document.querySelectorAll('[data-reaction-category]').forEach(button => { const active = button.dataset.reactionCategory === picker.category; button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active)); });
+    const recent = composer.recentOptions();
+    let items = (picker.category === 'recent' ? recent : composer.reactionOptions()).filter(item => (['all', 'recent'].includes(picker.category) || (picker.category === 'custom' ? item.category === 'custom' : favorites.includes(item.emoji))) && `${item.name} ${item.keywords || ''} ${item.emoji}`.toLowerCase().includes(query));
     if (query) items.sort((a,b) => Number(b.name === query) - Number(a.name === query));
-    $('#reaction-options').innerHTML = items.map(item => `<button type="button" data-pick-reaction="${esc(item.name)}" title=":${esc(item.name)}:" aria-label="${esc(item.name)}" aria-pressed="${values(picker.id).some(r => r.user_id === state.me.id && r.emoji_name === item.name)}">${composer.reactionEmoji(item.name)}</button>`).join('') || '<p class="empty">이모지가 없습니다.</p>';
+    const leading = !query && ['all', 'custom'].includes(picker.category) ? recent.filter(item => picker.category !== 'custom' || item.category === 'custom') : [];
+    const leadingNames = new Set(leading.map(item => item.name));
+    items = items.filter(item => !leadingNames.has(item.name));
+    const tile = item => `<button type="button" data-pick-reaction="${esc(item.name)}" title=":${esc(item.name)}:" aria-label="${esc(item.name)}" aria-pressed="${values(picker.id).some(r => r.user_id === state.me.id && r.emoji_name === item.name)}">${composer.reactionEmoji(item.name)}</button>`;
+    $('#reaction-options').innerHTML = (leading.length ? '<section class="reaction-recent-section" aria-label="최근 사용"><p class="emoji-section-label">최근 사용</p><div class="emoji-grid">' + leading.map(tile).join('') + '</div></section>' : '') + items.map(tile).join('') || '<p class="empty">' + (picker.category === 'recent' && !query ? '최근 사용한 이모지가 없습니다.' : '이모지가 없습니다.') + '</p>';
     document.querySelectorAll('[data-pick-reaction]').forEach(button => button.onclick = async () => { const current = picker; button.disabled = true; const success = await toggle(current.id, button.dataset.pickReaction); if (success && picker === current) $('#reaction-picker-dialog').close(); else button.disabled = false; });
   }
+
   async function openDetails(id, filter = '') {
     const seq = ++viewTicket, epoch = state.generation, version = versions.get(id) || 0;
     detail = { id, filter };

@@ -1,12 +1,19 @@
 const composer = (() => {
   let attachments = new Map(), busy = new Set(), custom = Object.create(null), recents = [], loaded = false, emojiPage = 0, hasMoreEmoji = true, emojiError = '', recentRevision = 0;
-  let emojiCategory = 'smile', emojiQuery = '', emojiTab = 'emoji';
+  let emojiCategory = 'smile', emojiQuery = '', emojiTab = 'emoji', loadJob = null;
   const aliases = { ...EmojiAliases, ...Object.fromEntries(EmojiData.map(item => [item.name, item.emoji])) };
   const cleanError = error => error.message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '');
   const list = channel => attachments.get(channel) || [];
   const format = message => RichText.render(message, custom, aliases);
-  async function load() {
-    if (loaded || state.demo || !api) return;
+  function load() {
+    if (state.demo || !api) return Promise.resolve();
+    if (loadJob) return loadJob;
+    if (loaded) return Promise.resolve();
+    const job = loadCatalog(); loadJob = job;
+    job.finally(() => { if (loadJob === job) loadJob = null; }).catch(() => {});
+    return job;
+  }
+  async function loadCatalog() {
     loaded = true; const epoch = state.generation, revision = recentRevision;
     const results = await Promise.allSettled([api.emojiList(0), api.getEmojiRecents()]);
     if (epoch !== state.generation) return;
@@ -151,8 +158,7 @@ const composer = (() => {
       wrapper.lastElementChild.onclick = async () => { try { await personal.toggle('emojiFavorites', item.emoji); renderEmojiResults(); } catch (error) { toast(cleanError(error)); } };
       button.onmouseenter = () => { $('#emoji-hover').textContent = `:${item.name}:`; };
       button.onclick = () => {
-        insert(item.emoji); recentRevision++; recents = [item.emoji, ...recents.filter(value => value !== item.emoji)].slice(0, 30);
-        if (!state.demo) api.saveEmojiRecents(recents).catch(() => {});
+        insert(item.emoji); rememberEmoji(item.emoji);
         $('#emoji-panel').hidden = true;
       };
     });
@@ -209,7 +215,7 @@ const composer = (() => {
   document.addEventListener('pointerdown', event => { if ($('#emoji-panel') && !event.target.closest('#emoji-panel,#emoji,#custom-emoji-dialog')) $('#emoji-panel').hidden = true; });
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && $('#emoji-panel') && !$('#emoji-panel').hidden) { event.preventDefault(); $('#emoji-panel').hidden = true; event.stopPropagation(); } });
   document.addEventListener('click', event => { const link = event.target.closest('[data-link]'); if (link) { event.preventDefault(); messageNavigation.open(link.dataset.link).catch(error => toast(cleanError(error))); } });
-  function reset() { attachments = new Map(); busy = new Set(); custom = Object.create(null); recents = []; recentRevision = 0; loaded = false; emojiPage = 0; emojiError = ''; hasMoreEmoji = true; emojiCategory = 'smile'; emojiQuery = ''; emojiTab = 'emoji'; $('#custom-emoji-dialog').close(); }
+  function reset() { attachments = new Map(); busy = new Set(); custom = Object.create(null); recents = []; recentRevision = 0; loaded = false; loadJob = null; emojiPage = 0; emojiError = ''; hasMoreEmoji = true; emojiCategory = 'smile'; emojiQuery = ''; emojiTab = 'emoji'; $('#custom-emoji-dialog').close(); }
   async function queueGif(id) {
     const channel = state.selected, epoch = state.generation;
     if (busy.has(channel)) return;
@@ -225,7 +231,15 @@ const composer = (() => {
     } catch (error) { toast(cleanError(error)); }
   }
   async function loadEmojiNames(names){const epoch=state.generation;if(state.demo||!api?.emojiByName)return;const known=new Set([...Object.keys(aliases),...reactionOptions().map(item=>item.name)]);await Promise.allSettled([...new Set(names)].filter(name=>/^[a-zA-Z0-9_+-]{1,64}$/.test(name)&&!known.has(name)).slice(0,30).map(async name=>{const item=await api.emojiByName(name);if(epoch===state.generation)custom[item.name]=item;}));}
+  async function rememberEmoji(value) {
+    recentRevision++; recents = [value, ...recents.filter(item => item !== value)].slice(0, 30);
+    const epoch = state.generation;
+    if (!state.demo) try { await api.saveEmojiRecents(recents); }
+    catch (error) { if (epoch === state.generation) toast('최근 사용 기록을 저장하지 못했습니다. ' + cleanError(error)); }
+  }
+  function rememberReaction(name) { return rememberEmoji(Object.hasOwn(custom, name) ? ':' + name + ':' : aliases[name] || ':' + name + ':'); }
+  function recentOptions() { const options = reactionOptions(); return recents.map(value => options.find(item => item.emoji === value)).filter(Boolean); }
   function reactionOptions() { return [...EmojiData, ...Object.values(custom).map(item => ({ name: item.name, emoji: `:${item.name}:`, image_url: item.image_url, category: 'custom', keywords: '서버 사용자' }))]; }
   function reactionEmoji(name) { const fallback = { thumbsup: '👍', thumbsdown: '👎', eyes: '👀' }; return Object.hasOwn(custom, name) ? `<img class="reaction-custom" src="${esc(custom[name].image_url)}" alt=":${esc(name)}:">` : esc(Object.hasOwn(aliases, name) ? aliases[name] : Object.hasOwn(fallback, name) ? fallback[name] : `:${name}:`); }
-  return { mount, send, format, reset, load, loadEmojiNames, queueGif, reactionOptions, reactionEmoji, chooseGifFile: () => { $('#emoji-panel').hidden = true; choose({ gifOnly: true }); } };
+  return { mount, send, format, reset, load, loadEmojiNames, queueGif, reactionOptions, reactionEmoji, recentOptions, rememberReaction, chooseGifFile: () => { $('#emoji-panel').hidden = true; choose({ gifOnly: true }); } };
 })();
