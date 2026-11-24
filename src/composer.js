@@ -1,5 +1,5 @@
 const composer = (() => {
-  let attachments = new Map(), busy = new Set(), custom = Object.create(null), recents = [], loaded = false, emojiPage = 0, hasMoreEmoji = true, emojiError = '';
+  let attachments = new Map(), busy = new Set(), custom = Object.create(null), recents = [], loaded = false, emojiPage = 0, hasMoreEmoji = true, emojiError = '', recentRevision = 0;
   let emojiCategory = 'smile', emojiQuery = '', emojiTab = 'emoji';
   const aliases = { ...EmojiAliases, ...Object.fromEntries(EmojiData.map(item => [item.name, item.emoji])) };
   const cleanError = error => error.message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '');
@@ -7,12 +7,15 @@ const composer = (() => {
   const format = message => RichText.render(message, custom, aliases);
   async function load() {
     if (loaded || state.demo || !api) return;
-    loaded = true; const epoch = state.generation;
+    loaded = true; const epoch = state.generation, revision = recentRevision;
     const results = await Promise.allSettled([api.emojiList(0), api.getEmojiRecents()]);
     if (epoch !== state.generation) return;
     if (results[0].status === 'fulfilled') { results[0].value.forEach(item => { custom[item.name] = item; }); hasMoreEmoji = results[0].value.length === 200; }
     else { emojiError = '서버 이모지를 불러오지 못했습니다. 기본 이모지를 사용할 수 있습니다.'; loaded = false; }
-    if (results[1].status === 'fulfilled') recents = [...new Set([...recents, ...results[1].value])].slice(0, 30);
+    if (results[1].status === 'fulfilled') {
+      recents = [...new Set([...recents, ...results[1].value])].slice(0, 30);
+      if (revision !== recentRevision) api.saveEmojiRecents(recents).catch(() => {});
+    }
     await loadEmojiNames(recents.map(value => /^:([a-zA-Z0-9_+-]{1,64}):$/.exec(value)?.[1]).filter(Boolean));
     if (epoch !== state.generation) return;
     document.querySelectorAll('.bubble[data-message]').forEach(el => { el.innerHTML = format(el.dataset.message); });
@@ -148,7 +151,7 @@ const composer = (() => {
       wrapper.lastElementChild.onclick = async () => { try { await personal.toggle('emojiFavorites', item.emoji); renderEmojiResults(); } catch (error) { toast(cleanError(error)); } };
       button.onmouseenter = () => { $('#emoji-hover').textContent = `:${item.name}:`; };
       button.onclick = () => {
-        insert(item.emoji); recents = [item.emoji, ...recents.filter(value => value !== item.emoji)].slice(0, 30);
+        insert(item.emoji); recentRevision++; recents = [item.emoji, ...recents.filter(value => value !== item.emoji)].slice(0, 30);
         if (!state.demo) api.saveEmojiRecents(recents).catch(() => {});
         $('#emoji-panel').hidden = true;
       };
@@ -206,7 +209,7 @@ const composer = (() => {
   document.addEventListener('pointerdown', event => { if ($('#emoji-panel') && !event.target.closest('#emoji-panel,#emoji,#custom-emoji-dialog')) $('#emoji-panel').hidden = true; });
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && $('#emoji-panel') && !$('#emoji-panel').hidden) { event.preventDefault(); $('#emoji-panel').hidden = true; event.stopPropagation(); } });
   document.addEventListener('click', event => { const link = event.target.closest('[data-link]'); if (link) { event.preventDefault(); messageNavigation.open(link.dataset.link).catch(error => toast(cleanError(error))); } });
-  function reset() { attachments = new Map(); busy = new Set(); custom = Object.create(null); recents = []; loaded = false; emojiPage = 0; emojiError = ''; hasMoreEmoji = true; emojiCategory = 'smile'; emojiQuery = ''; emojiTab = 'emoji'; $('#custom-emoji-dialog').close(); }
+  function reset() { attachments = new Map(); busy = new Set(); custom = Object.create(null); recents = []; recentRevision = 0; loaded = false; emojiPage = 0; emojiError = ''; hasMoreEmoji = true; emojiCategory = 'smile'; emojiQuery = ''; emojiTab = 'emoji'; $('#custom-emoji-dialog').close(); }
   async function queueGif(id) {
     const channel = state.selected, epoch = state.generation;
     if (busy.has(channel)) return;
