@@ -19,7 +19,7 @@ api.onRealtime=listener=>{const handler=(_event,data)=>listener(data);ipcRendere
 api.getConsoleAccess=()=>ipcRenderer.invoke('getConsoleAccess');
 api.admin=(action,params)=>ipcRenderer.invoke('admin',action,params);
 api.openSystemConsole=section=>ipcRenderer.invoke('openSystemConsole',section);
-for(const name of ['accountProfile','saveAccountProfile','changeAccountPassword','pinnedPosts','setPostPin'])api[name]=(...args)=>ipcRenderer.invoke(name,...args);
+for(const name of ['chooseProfileImage','saveProfileImage','resetProfileImage','saveCustomStatus','clearCustomStatus','accountProfile','saveAccountProfile','changeAccountPassword','pinnedPosts','setPostPin'])api[name]=(...args)=>ipcRenderer.invoke(name,...args);
 api.onAccountProfile=listener=>{const handler=(_event,user)=>listener(user);ipcRenderer.on('account:profile-updated',handler);return()=>ipcRenderer.removeListener('account:profile-updated',handler);};
 api.onAccountLogout=listener=>{const handler=()=>listener();ipcRenderer.on('account:logout',handler);return()=>ipcRenderer.removeListener('account:logout',handler);};
 api.sendTyping = (channel,parent) => ipcRenderer.invoke('sendTyping',channel,parent);
@@ -34,7 +34,7 @@ api.checkForUpdates = () => ipcRenderer.invoke('updates:check');
 api.openUpdateDownload = () => ipcRenderer.invoke('updates:openDownload');
 api.quitForUpdateInstall = () => ipcRenderer.invoke('updates:quitForInstall');
 api.onUpdateState = listener => { const handler = (_event, value) => listener(value); ipcRenderer.on('updates:state', handler); return () => ipcRenderer.removeListener('updates:state', handler); };
-for (const name of ['chooseAttachments', 'stageAttachment', 'discardAttachment', 'uploadAttachment', 'emojiList', 'createEmoji', 'getEmojiRecents', 'saveEmojiRecents', 'openLink']) api[name] = (...args) => ipcRenderer.invoke(name, ...args);
+for (const name of ['chooseAttachments', 'stageAttachment', 'discardAttachment', 'uploadAttachment', 'emojiByName', 'emojiList', 'createEmoji', 'getEmojiRecents', 'saveEmojiRecents', 'openLink']) api[name] = (...args) => ipcRenderer.invoke(name, ...args);
 for (const name of ['getPersonalSettings', 'savePersonalSettings', 'gifSearch', 'gifById', 'gifReload', 'stageGif', 'userProfile']) api[name] = (...args) => ipcRenderer.invoke(name, ...args);
 for (const name of ['post', 'thread', 'editPost', 'deletePost', 'postLink', 'sharePost', 'copyText']) api[name] = (...args) => ipcRenderer.invoke(name, ...args);
 for (const name of ['reactions', 'setReaction']) api[name] = (...args) => ipcRenderer.invoke(name, ...args);

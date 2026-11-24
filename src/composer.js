@@ -16,6 +16,7 @@ const composer = (() => {
     document.querySelectorAll('.bubble[data-message]').forEach(el => { el.innerHTML = format(el.dataset.message); });
     messageActions.hydrateReferences().catch(() => {});
     if ($('#emoji-panel') && !$('#emoji-panel').hidden) renderPicker();
+    userStatus.paint();
   }
   function mount(channel) {
     const form = $('#composer');
@@ -217,7 +218,8 @@ const composer = (() => {
       if ($('#emoji-panel')) $('#emoji-panel').hidden = true; toast('GIF를 첨부했습니다. 전송 버튼으로 보내세요.');
     } catch (error) { toast(cleanError(error)); }
   }
+  async function loadEmojiNames(names){const epoch=state.generation;if(state.demo||!api?.emojiByName)return;const known=new Set([...Object.keys(aliases),...reactionOptions().map(item=>item.name)]);await Promise.allSettled([...new Set(names)].filter(name=>/^[a-zA-Z0-9_+-]{1,64}$/.test(name)&&!known.has(name)).slice(0,30).map(async name=>{const item=await api.emojiByName(name);if(epoch===state.generation)custom[item.name]=item;}));}
   function reactionOptions() { return [...EmojiData, ...Object.values(custom).map(item => ({ name: item.name, emoji: `:${item.name}:`, image_url: item.image_url, category: 'custom', keywords: '서버 사용자' }))]; }
   function reactionEmoji(name) { const fallback = { thumbsup: '👍', thumbsdown: '👎', eyes: '👀' }; return Object.hasOwn(custom, name) ? `<img class="reaction-custom" src="${esc(custom[name].image_url)}" alt=":${esc(name)}:">` : esc(Object.hasOwn(aliases, name) ? aliases[name] : Object.hasOwn(fallback, name) ? fallback[name] : `:${name}:`); }
-  return { mount, send, format, reset, load, queueGif, reactionOptions, reactionEmoji, chooseGifFile: () => { $('#emoji-panel').hidden = true; choose({ gifOnly: true }); } };
+  return { mount, send, format, reset, load, loadEmojiNames, queueGif, reactionOptions, reactionEmoji, chooseGifFile: () => { $('#emoji-panel').hidden = true; choose({ gifOnly: true }); } };
 })();

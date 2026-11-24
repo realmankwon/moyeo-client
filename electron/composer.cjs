@@ -40,6 +40,7 @@ function registerComposer(client, handle, getWindow, giphy) {
     return uploaded;
   });
   handle('emojiList', page => client.emojiList(page));
+  handle('emojiByName', name => client.emojiByName(name));
   handle('createEmoji', async name => {
     current();
     if (typeof name !== 'string' || !/^[a-z0-9_-]{2,64}$/.test(name)) throw new Error('이름은 영문 소문자·숫자·밑줄·하이픈 2~64자로 입력해 주세요.');

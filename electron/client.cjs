@@ -190,6 +190,7 @@ class MattermostClient {
     return data.file_infos[0];
   }
   withEmojiImage(emoji) { return { ...emoji, image_url: `moyeo-media://${this.mediaKey}/emojis/${validId(emoji.id)}` }; }
+  async emojiByName(name){if(typeof name!=='string'||!(/^[a-zA-Z0-9_+-]{1,64}$/).test(name))throw Error('이모지 이름을 확인해 주세요.');const epoch=this.mediaKey,data=(await this.request('/emoji/name/'+encodeURIComponent(name))).data;if(epoch!==this.mediaKey)throw Error('계정이 변경되었습니다.');return this.withEmojiImage(data);}
   async emojiList(page = 0) {
     if (!Number.isInteger(page) || page < 0 || page > 1000) throw new Error('잘못된 이모지 페이지입니다.');
     return (await this.request(`/emoji?page=${page}&per_page=200&sort=name`)).data.map(emoji => this.withEmojiImage(emoji));

@@ -19,3 +19,9 @@ test('read events accept current/legacy formats and reject another account or ma
  await until(()=>events.length===3);await new Promise(r=>setTimeout(r,40));
  assert.deepEqual(events,[{type:'channels_viewed',times:{[channel]:100,[second]:200}},{type:'channels_viewed',times:{[channel]:250}},{type:'channel_viewed',channel:second}]);
 });
+
+test('profile events carry sanitized live user props and avatar revisions',async t=>{
+ const server=new WebSocketServer({port:0,host:'127.0.0.1'});await new Promise(r=>server.on('listening',r));const id='a'.repeat(26),events=[];let peer;server.on('connection',socket=>{peer=socket;socket.on('message',()=>socket.send(JSON.stringify({event:'hello'})));});
+ const client={server:`http://127.0.0.1:${server.address().port}`,token:'fixture',me:{id,roles:'system_user'},mediaKey:'one',withAvatar:user=>({...user,avatar_url:'image/'+user.last_picture_update})},service=new TypingService(client,()=>{},undefined,event=>events.push(event));t.after(()=>{service.stop();for(const socket of server.clients)socket.terminate();server.close();});service.start();await until(()=>service.connected);
+ const first={id,nickname:'변경',last_picture_update:10,props:{customStatus:'{"emoji":"coffee","text":"회의"}',private:'never'},roles:'system_admin',mfa_secret:'never'};peer.send(JSON.stringify({event:'user_updated',data:{user:JSON.stringify(first)}}));await until(()=>events.some(event=>event.type==='user_updated'));const event=events.find(event=>event.type==='user_updated');assert.equal(event.user.avatar_url,'image/10');assert.equal(event.user.roles,undefined);assert.equal(event.user.mfa_secret,undefined);assert.deepEqual(event.user.props,{customStatus:first.props.customStatus});assert.equal(client.me.roles,'system_user');
+});
