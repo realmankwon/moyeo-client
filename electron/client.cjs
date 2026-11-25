@@ -111,6 +111,18 @@ class MattermostClient {
     const data=(await this.request('/users/autocomplete?'+query)).data;
     return {users:(data.users||[]).map(user=>this.withAvatar(user)),out_of_channel:(data.out_of_channel||[]).map(user=>this.withAvatar(user))};
   }
+  async userByUsername(name) {
+    if(typeof name!=='string'||!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/.test(name))throw Error('사용자 이름을 확인해 주세요.');
+    const epoch=this.mediaKey,user=(await this.request('/users/username/'+encodeURIComponent(name))).data;
+    if(epoch!==this.mediaKey)throw Error('계정이 변경되었습니다.');return this.withAvatar(user);
+  }
+  async linkPreviewImageResponse(address,signal) {
+    const safe=require('../src/link-preview-data.js').address(address,this.server);if(!safe)throw Error('미리보기 이미지 주소를 확인해 주세요.');
+    if(!this.server||!this.token)throw Error('서버에 먼저 연결해 주세요.');
+    const origin=new URL(this.server),image=new URL(safe),proxy=origin.pathname.replace(/\/$/,'')+'/api/v4/image';
+    const target=image.origin===origin.origin&&image.pathname===proxy?safe:this.server+'/api/v4/image?'+new URLSearchParams({url:safe});
+    return this.fetcher(target,{headers:{Authorization:'Bearer '+this.token},redirect:'error',signal:signal?AbortSignal.any([signal,AbortSignal.timeout(20000)]):AbortSignal.timeout(20000)});
+  }
   async fileInfo(id, signal) {
     const info = (await this.request(`/files/${validId(id)}/info`, {signal})).data;
     return { ...info, id, url: `moyeo-media://${this.mediaKey}/${id}/original`, thumbnail: `moyeo-media://${this.mediaKey}/${id}/thumbnail`, preview: `moyeo-media://${this.mediaKey}/${id}/preview` };

@@ -15,6 +15,7 @@ api.isWindowActive = () => ipcRenderer.invoke('isWindowActive');
 api.resolvePostLink = address => ipcRenderer.invoke('resolvePostLink', address);
 api.searchContent=options=>ipcRenderer.invoke('searchContent',options);
 api.mentionUsers=(...args)=>ipcRenderer.invoke('mentionUsers',...args);
+api.userByUsername=name=>ipcRenderer.invoke('userByUsername',name);
 api.getRealtimeStatus=()=>ipcRenderer.invoke('getRealtimeStatus');
 api.onRealtime=listener=>{const handler=(_event,data)=>listener(data);ipcRenderer.on('chat:realtime',handler);return()=>ipcRenderer.removeListener('chat:realtime',handler);};
 api.getConsoleAccess=()=>ipcRenderer.invoke('getConsoleAccess');

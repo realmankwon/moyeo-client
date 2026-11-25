@@ -146,6 +146,7 @@ if (singleInstance) app.whenReady().then(async () => {
   handle('resolvePostLink', address => client.resolvePostLink(address));
   handle('searchContent',options=>client.searchContent(options));
   handle('mentionUsers',(...args)=>client.mentionUsers(...args));
+  handle('userByUsername',name=>client.userByUsername(name));
   handle('setIncomingCount', async count => {
     if(chatWindows.actor()?.floating)return;
     if (!Number.isInteger(count) || count < 0 || count > 10000) return;

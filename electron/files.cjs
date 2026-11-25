@@ -39,12 +39,14 @@ function registerFiles(client, handle, getWindow, giphy) {
       const match = /^\/([a-z0-9]{26})\/(original|thumbnail|preview)$/.exec(url.pathname);
       const avatar = /^\/avatars\/([a-z0-9]{26})\/\d{1,20}$/.exec(url.pathname);
       const emoji = /^\/emojis\/([a-z0-9]{26})$/.exec(url.pathname);
+      const linkPreview = /^\/link-preview\/([a-zA-Z0-9_-]{1,8192})$/.exec(url.pathname);
       const gif = /^\/giphy\/([a-zA-Z0-9]{1,80})\/preview$/.exec(url.pathname);
       const remoteGif = /^\/giphy-url\/([a-zA-Z0-9_-]{1,3000})$/.exec(url.pathname);
-      if (url.hostname !== client.mediaKey || !client.me || (!match && !avatar && !emoji && !gif && !remoteGif) || url.search || request.method !== 'GET') return new Response(null, { status: 403 });
-      const response = remoteGif ? await giphy.responseUrl(Buffer.from(remoteGif[1], 'base64url').toString('utf8')) : gif ? await giphy.response(gif[1]) : emoji ? await client.emojiResponse(emoji[1], request.signal) : avatar ? await client.avatarResponse(avatar[1], request.signal) : await client.fileResponse(match[1], match[2], request.headers.get('range'), request.signal);
+      if (url.hostname !== client.mediaKey || !client.me || (!match && !avatar && !emoji && !gif && !remoteGif && !linkPreview) || url.search || request.method !== 'GET') return new Response(null, { status: 403 });
+      const response = linkPreview ? await client.linkPreviewImageResponse(Buffer.from(linkPreview[1], 'base64url').toString('utf8'), request.signal) : remoteGif ? await giphy.responseUrl(Buffer.from(remoteGif[1], 'base64url').toString('utf8')) : gif ? await giphy.response(gif[1]) : emoji ? await client.emojiResponse(emoji[1], request.signal) : avatar ? await client.avatarResponse(avatar[1], request.signal) : await client.fileResponse(match[1], match[2], request.headers.get('range'), request.signal);
       if (!response.ok) { await response.body?.cancel(); return new Response(null, { status: response.status }); }
       const type = (response.headers.get('content-type') || '').split(';')[0];
+      if (linkPreview && !/^image\/(png|jpeg|gif|webp|avif)$/.test(type)) { await response.body?.cancel(); return new Response(null, { status: 415 }); }
       if ((avatar || emoji) && !type.startsWith('image/')) { await response.body?.cancel(); return new Response(null, { status: 415 }); }
       if (!/^(image|video|audio)\//.test(type)) { await response.body?.cancel(); return new Response(null, { status: 415 }); }
       const headers = { 'Content-Type': type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };

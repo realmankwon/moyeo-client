@@ -1,6 +1,6 @@
 {
   "name": "moyeo-mattermost-client",
-  "version": "0.15.16",
+  "version": "0.15.17",
   "releaseRepository": "realmankwon/moyeo-client",
   "private": true,
   "description": "A Korean messenger-style desktop client for Mattermost",
@@ -29,7 +29,8 @@
     "test:profile": "node tests/profile-ui.cjs",
     "test:media-batch": "node tests/media-batch-ui.cjs",
     "test:emoji-recents": "node tests/emoji-recents-ui.cjs",
-    "test:reaction-recents": "node tests/reaction-recents-ui.cjs"
+    "test:reaction-recents": "node tests/reaction-recents-ui.cjs",
+    "test:link-mentions": "node tests/link-mentions-ui.cjs"
   },
   "devDependencies": {
     "@emoji-mart/data": "^1.2.1",

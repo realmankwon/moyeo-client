@@ -28,7 +28,7 @@ const composer = (() => {
     document.querySelectorAll('.bubble[data-message]').forEach(el => { el.innerHTML = format(el.dataset.message); });
     messageActions.hydrateReferences().catch(() => {});
     if ($('#emoji-panel') && !$('#emoji-panel').hidden) renderPicker();
-    userStatus.paint();
+    userStatus.paint();mentions.paint();
   }
   function mount(channel) {
     const form = $('#composer');

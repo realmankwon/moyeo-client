@@ -92,5 +92,5 @@ const personal = (() => {
   document.addEventListener('click', event => { const target = event.target.closest('[data-profile]'); if (target && !target.closest('#profile-dialog')) { event.preventDefault(); event.stopPropagation(); profile(target.dataset.profile); } }, true);
   document.addEventListener('keydown', event => { const target = event.target.closest('[data-profile]'); if (target && !target.closest('#profile-dialog') && ['Enter',' '].includes(event.key)) { event.preventDefault(); event.stopPropagation(); profile(target.dataset.profile); } }, true);
   function reset() { data = empty(); ready = false; profileTicket++; $('#profile-dialog').close(); $('#theme-dialog').close(); }
-  return { load, save, get, toggle, apply, openTheme, reset };
+  return { load, save, get, toggle, apply, openTheme, reset, openProfile:profile };
 })();

@@ -357,7 +357,7 @@ function renderMessages(scroll = false) {
     const message = post.message || (attachmentMarkup ? '' : '(시스템 메시지)');
     const minute = Math.floor(post.create_at / 60000), showTime = minute !== lastMinute; lastMinute = minute;
     const continued = !divider && post.user_id === lastAuthor && post.create_at - lastAt < 300000; lastAuthor = post.user_id; lastAt = post.create_at;
-    return `${divider}<article class="message ${self ? 'self' : ''} ${continued ? 'continued' : ''}" data-message-id="${esc(post.id)}" tabindex="0">${self ? '' : accountAvatar(post.user_id, true)}<div class="message-content">${self ? '' : `<div class="sender">${userStatus.name(state.users[post.user_id])}</div>`}${messageActions.reference(post)}<div class="bubble-row ${message ? '' : 'media-only'}">${message ? `<div class="bubble rich-text" data-message="${esc(message)}">${composer.format(message)}</div>` : attachmentMarkup}${showTime ? `<time datetime="${new Date(post.create_at).toISOString()}">${clock(post.create_at)}</time>` : ''}</div>${message ? attachmentMarkup : ''}${messageActions.annotation(post)}${reactions.markup(post)}</div></article>`;
+    return `${divider}<article class="message ${self ? 'self' : ''} ${continued ? 'continued' : ''}" data-message-id="${esc(post.id)}" tabindex="0">${self ? '' : accountAvatar(post.user_id, true)}<div class="message-content">${self ? '' : `<div class="sender">${userStatus.name(state.users[post.user_id])}</div>`}${messageActions.reference(post)}<div class="bubble-row ${message ? '' : 'media-only'}">${message ? `<div class="bubble rich-text" data-message="${esc(message)}">${composer.format(message)}</div>` : attachmentMarkup}${showTime ? `<time datetime="${new Date(post.create_at).toISOString()}">${clock(post.create_at)}</time>` : ''}</div>${message ? attachmentMarkup : ''}${linkPreviews.markup(post)}${messageActions.annotation(post)}${reactions.markup(post)}</div></article>`;
   }).join('') || '<div class="empty">아직 메시지가 없어요.<br>첫 인사를 건네보세요.</div>';
   if (scroll) area.scrollTop = area.scrollHeight;
   else area.scrollTop = oldTop + area.scrollHeight - oldHeight;
@@ -366,6 +366,8 @@ function renderMessages(scroll = false) {
   media.hydrateChat(state.posts, state.selected);
   messageActions.hydrateReferences().catch(() => {});
   reactions.hydrate(state.posts).catch(() => {});
+  linkPreviews.hydrate(state.posts).catch(() => {});
+  mentions.paint(area);
 }
 async function loadMore() {
   if(state.historyLoading||state.channelLoading||!state.hasMore||!state.posts.length)return;
@@ -472,7 +474,7 @@ async function logout(skipServer = false) {
   if(typeof messageSearch!=='undefined')messageSearch.reset();
   messageNavigation.reset();
   scrollCleanup();
-  media.reset();
+  media.reset();linkPreviews.reset();
   composer.reset();
   personal.reset(); gifs.reset();
   messageActions.reset();
