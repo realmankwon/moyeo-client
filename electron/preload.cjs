@@ -12,6 +12,7 @@ for(const [method,event]of [['onChannelRead','chat:read'],['onPostSent','chat:po
 api.onBatchDownload=listener=>{const handler=(_event,value)=>listener(value);ipcRenderer.on('files:batch-progress',handler);return()=>ipcRenderer.removeListener('files:batch-progress',handler);};
 api.restoreSession = () => ipcRenderer.invoke('restoreSession');
 api.isWindowActive = () => ipcRenderer.invoke('isWindowActive');
+api.publicLinkPreview = address => ipcRenderer.invoke('publicLinkPreview', address);
 api.resolvePostLink = address => ipcRenderer.invoke('resolvePostLink', address);
 api.searchContent=options=>ipcRenderer.invoke('searchContent',options);
 api.mentionUsers=(...args)=>ipcRenderer.invoke('mentionUsers',...args);

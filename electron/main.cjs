@@ -5,6 +5,7 @@ const fs = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
 const { MattermostClient } = require('./client.cjs');
 const { registerFiles } = require('./files.cjs');
+const { PublicLinkPreviews } = require('./public-link-previews.cjs');
 const { registerComposer } = require('./composer.cjs');
 const { PersonalStore } = require('./personal.cjs');
 const { GiphyService } = require('./giphy.cjs');
@@ -114,6 +115,9 @@ if (singleInstance) app.whenReady().then(async () => {
   app.on('before-quit', () => typing.stop());
   handle('sendTyping', (channel,parent) => typing.send(channel,parent));
   win.webContents.on('will-navigate', event => event.preventDefault());
+  const publicLinkPreviews = new PublicLinkPreviews(client);
+  handle('publicLinkPreview', address => publicLinkPreviews.lookup(address));
+  app.on('before-quit', () => publicLinkPreviews.reset());
   const giphy = new GiphyService(client, (...args) => net.fetch(...args));
   const personal = new PersonalStore(path.join(app.getPath('userData'), 'personal-settings.json'));
   const account = () => { if (!client.me) throw new Error('먼저 로그인해 주세요.'); return JSON.stringify([client.server, client.me.id]); };
@@ -158,7 +162,7 @@ if (singleInstance) app.whenReady().then(async () => {
     incomingReady=false;
     if(chatWindows.actor()?.floating)throw Error('계정 변경은 메인 창에서 해주세요.');
     chatWindows.closeFloating();
-    systemConsole.close(); typing.stop(); resetComposer(); giphy.reset(); await sessions.clear();
+    systemConsole.close(); typing.stop(); resetComposer(); giphy.reset(); publicLinkPreviews.reset(); await sessions.clear();
     const user = await client.connect(data);
     const settings = await readSettings(); settings.autoLogin = data.remember !== false;
     await fs.writeFile(path.join(app.getPath('userData'), 'appearance.json'), JSON.stringify(settings));
@@ -173,9 +177,9 @@ if (singleInstance) app.whenReady().then(async () => {
     try { const user = await client.connect(saved); client.ownedSession = saved.ownedSession; typing.start(); return user; }
     catch (error) { if (error.status === 401 || error.status === 403) await sessions.clear(); throw error; }
   });
-  registerFiles(client, handle, () => chatWindows.owner()||win, giphy);
+  registerFiles(client, handle, () => chatWindows.owner()||win, giphy, publicLinkPreviews);
   const resetComposer = registerComposer(client, handle, () => chatWindows.owner()||win, giphy);
-  handle('disconnect', async () => {incomingReady=false;desktop.resetActivation(); chatWindows.closeFloating();systemConsole.close(); typing.stop(); await sessions.clear(); resetComposer(); giphy.reset(); const connected=!!client.me;try{return await client.disconnect();}finally{if(connected)chatWindows.broadcast('account:cleared');} });
+  handle('disconnect', async () => {incomingReady=false;desktop.resetActivation(); chatWindows.closeFloating();systemConsole.close(); typing.stop(); await sessions.clear(); resetComposer(); giphy.reset(); publicLinkPreviews.reset(); const connected=!!client.me;try{return await client.disconnect();}finally{if(connected)chatWindows.broadcast('account:cleared');} });
   handle('channelReadStates',ids=>client.channelReadStates(ids));
   handle('view',async channel=>{const epoch=client.mediaKey,result=await client.view(channel);if(epoch!==client.mediaKey)throw Error('계정이 변경되었습니다.');if(result.last_viewed_at_times&&typeof result.last_viewed_at_times==='object')chatWindows.broadcast('chat:realtime',{type:'channels_viewed',times:result.last_viewed_at_times});else chatWindows.read(channel);return result;});
   handle('send',async(...args)=>{const result=await client.send(...args);chatWindows.broadcast('chat:posted',result);return result;});

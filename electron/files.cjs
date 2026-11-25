@@ -9,7 +9,7 @@ const { Readable } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const { isText, ext, previewType, canOpen } = require('../src/file-types.js');
 
-function registerFiles(client, handle, getWindow, giphy) {
+function registerFiles(client, handle, getWindow, giphy, publicLinkPreviews) {
   const icons=new FileIcons(app);
   const savedFiles=new Map(),batchJobs=new Map();
   handle('copyFileImage',id=>require('./image-clipboard.cjs').copyFileImage(client,id,require('electron')));
@@ -36,6 +36,10 @@ function registerFiles(client, handle, getWindow, giphy) {
   protocol.handle('moyeo-media', async request => {
     try {
       const url = new URL(request.url);
+      const publicPreview = /^\/public-preview\/([a-f0-9-]{36})$/.exec(url.pathname);
+      if (publicPreview && url.hostname === client.mediaKey && client.me && !url.search && request.method === 'GET') {
+        return await publicLinkPreviews.image(publicPreview[1], request.signal);
+      }
       const match = /^\/([a-z0-9]{26})\/(original|thumbnail|preview)$/.exec(url.pathname);
       const avatar = /^\/avatars\/([a-z0-9]{26})\/\d{1,20}$/.exec(url.pathname);
       const emoji = /^\/emojis\/([a-z0-9]{26})$/.exec(url.pathname);
