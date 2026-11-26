@@ -10,6 +10,7 @@ const { execFileSync } = require('node:child_process');
 const { tool } = require('./mac-sign-tool.cjs');
 const root = path.resolve(__dirname, '..');
 const pkg = require('../package.json');
+const releaseOutput = process.argv[2] ? path.resolve(process.argv[2]) : null;
 const electronVersion = require('electron/package.json').version;
 const openZip = file => new Promise((resolve,reject) => yauzl.open(file,{lazyEntries:true},(error,zip)=>error?reject(error):resolve(zip)));
 const streamEntry = (zip,entry) => new Promise((resolve,reject)=>zip.openReadStream(entry,(error,stream)=>error?reject(error):resolve(stream)));
@@ -38,6 +39,7 @@ async function build(arch,runtime) {
    else if(name==='Moyeo.app/Contents/Info.plist') {
     const info=plist.parse((await bytes(await streamEntry(input,entry))).toString());
     delete info.ElectronAsarIntegrity;
+    if (releaseOutput) info.CFBundleIconFile = 'Moyeo.icns';
     Object.assign(info,{CFBundleIdentifier:'com.moyeo.mattermost',CFBundleName:'Moyeo',CFBundleDisplayName:'Moyeo',CFBundleShortVersionString:pkg.version,CFBundleVersion:pkg.version,NSMicrophoneUsageDescription:'채팅에서 음성 및 영상 기능을 사용할 때 마이크 접근이 필요합니다.'});
     output.addBuffer(Buffer.from(plist.build(info)),name,options);
    } else { const stream=await streamEntry(input,entry); const drained=new Promise((res,rej)=>{stream.on('end',res);stream.on('error',rej);});output.addReadStream(stream,name,options);await drained; }
@@ -45,9 +47,16 @@ async function build(arch,runtime) {
   })().catch(error=>{input.close();reject(error);});});
   input.readEntry();
  });
- const app='Moyeo.app/Contents/Resources/app/';
- for(const folder of ['electron','src'])for(const [file,name]of await sourceFiles(path.join(root,folder)))output.addFile(file,app+folder+'/'+name,{mode:0o100644});
- output.addBuffer(Buffer.from(JSON.stringify({name:pkg.name,version:pkg.version,main:pkg.main,description:pkg.description})),app+'package.json',{mode:0o100644});
+ const resources = 'Moyeo.app/Contents/Resources/';
+ if (releaseOutput) {
+  // Both platforms use the same portable JavaScript archive, including production dependencies.
+  output.addFile(path.join(releaseOutput, 'win-unpacked/resources/app.asar'), resources + 'app.asar', { mode: 0o100644 });
+  output.addFile(path.join(root, 'build/icon.icns'), resources + 'Moyeo.icns', { mode: 0o100644 });
+ } else {
+  const app = resources + 'app/';
+  for(const folder of ['electron','src'])for(const [file,name]of await sourceFiles(path.join(root,folder)))output.addFile(file,app+folder+'/'+name,{mode:0o100644});
+  output.addBuffer(Buffer.from(JSON.stringify({name:pkg.name,version:pkg.version,main:pkg.main,description:pkg.description})),app+'package.json',{mode:0o100644});
+ }
  const guide=`모여 ${pkg.version} · macOS ${arch}\n\nZIP을 Mac에서 풀고 Moyeo.app을 응용 프로그램으로 옮긴 뒤 더블클릭하세요. 별도 준비 스크립트는 필요하지 않습니다.\n\n앱과 중첩 실행 파일은 배포 전에 ad-hoc 서명했습니다. Developer ID 서명 및 Apple 공증은 아직 없으므로 최초 실행이 차단되면 시스템 설정 > 개인정보 보호 및 보안에서 이 앱의 실행을 허용해야 할 수 있습니다. 실제 실행 테스트 여부는 배포 시 제공하는 검증 결과를 확인하세요.\n\n설정과 암호화 로그인 정보는 ~/Library/Application Support/${pkg.name}에 저장됩니다.\n`;
  output.addBuffer(Buffer.from(guide),'README-MAC.txt',{mode:0o100644});
  output.end();await completed;return target;
@@ -61,7 +70,7 @@ const linuxPath = value => { const absolute=path.resolve(value); const match=abs
  const downloads=await Promise.all(arches.map(arch=>downloadArtifact({version:electronVersion,platform:'darwin',arch,artifactName:'electron',cacheRoot:path.join(root,'dist','runtime-cache')})));
  for(let i=0;i<arches.length;i++){
   const unsigned=await build(arches[i],downloads[i]);
-  const target=path.join(root,'dist',`Moyeo-${pkg.version}-mac-${arches[i]}.zip`);
+  const target=path.join(releaseOutput || path.join(root,'dist'),`Moyeo-${pkg.version}-mac-${arches[i]}.zip`);
   const script=path.join(root,'scripts/sign-mac.py');
   if(process.platform==='darwin')execFileSync('python3',[script,unsigned,target,'--native'],{stdio:'inherit'});
   else execFileSync('wsl.exe',['-d',process.env.MOYEO_WSL_DISTRO||'Ubuntu','--','python3',linuxPath(script),linuxPath(unsigned),linuxPath(target),linuxPath(signer)],{stdio:'inherit',windowsHide:true});

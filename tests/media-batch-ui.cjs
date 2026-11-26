@@ -22,7 +22,27 @@ const root=path.resolve(__dirname,'..'),me='a'.repeat(26),other='b'.repeat(26),r
    for(const [width,height]of [[1180,800],[1051,721],[901,651]]){await app.evaluate(({BrowserWindow},size)=>BrowserWindow.getAllWindows()[0].setSize(...size),[width,height]);
     for(const mode of ['fit','actual-size']){await page.locator('#viewer-'+mode).click();await page.waitForTimeout(80);const spread=await page.locator('#viewer-stage').evaluate(async stage=>{await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));const samples=[];for(let i=0;i<40;i++){await new Promise(requestAnimationFrame);const rect=stage.querySelector('img').getBoundingClientRect();samples.push([rect.x,rect.y,rect.width,rect.height,stage.scrollLeft,stage.scrollTop]);}return samples[0].map((_,i)=>Math.max(...samples.map(row=>row[i]))-Math.min(...samples.map(row=>row[i])));});assert.ok(spread.every(value=>value<.25),'Viewer geometry must stay still: '+JSON.stringify({id,width,height,mode,spread}));}
    }
-   await page.locator('#viewer-actual-size').click();await page.locator('#viewer-zoom-in').click();await page.locator('#viewer-stage').evaluate(stage=>{stage.scrollLeft=100;stage.scrollTop=120;});const pan=await page.locator('#viewer-stage').evaluate(stage=>[stage.scrollLeft,stage.scrollTop]);await page.waitForTimeout(150);assert.deepEqual(await page.locator('#viewer-stage').evaluate(stage=>[stage.scrollLeft,stage.scrollTop]),pan);await page.locator('#viewer-fit').click();await page.locator('#viewer-dialog').press('Escape');await expect(page.locator('#library-dialog')).toBeVisible();
+   await page.locator('#viewer-actual-size').click();await page.locator('#viewer-zoom-in').click();await page.locator('#viewer-stage').evaluate(stage=>{stage.scrollLeft=100;stage.scrollTop=120;});const pan=await page.locator('#viewer-stage').evaluate(stage=>[stage.scrollLeft,stage.scrollTop]);await page.waitForTimeout(150);assert.deepEqual(await page.locator('#viewer-stage').evaluate(stage=>[stage.scrollLeft,stage.scrollTop]),pan);
+   const stage = page.locator('#viewer-stage');
+   const scroll = () => stage.evaluate(area => [area.scrollLeft, area.scrollTop]);
+   const start = await stage.evaluate(area => {
+    area.scrollTo(0, 0);
+    const bounds = area.getBoundingClientRect();
+    return { x: bounds.left + area.clientWidth / 2, y: bounds.top + area.clientHeight / 2,
+      horizontal: area.scrollWidth > area.clientWidth };
+   });
+   await page.mouse.move(start.x, start.y);
+   await page.mouse.down();
+   await page.mouse.move(start.x - 70, start.y - 80, { steps: 4 });
+   await page.mouse.up();
+   assert.deepEqual(await scroll(), [start.horizontal ? 70 : 0, 80], 'Dragging the image pans each overflowing axis.');
+   await page.mouse.move(start.x, start.y);
+   assert.deepEqual(await scroll(), [start.horizontal ? 70 : 0, 80], 'Releasing the mouse stops panning.');
+   await page.mouse.wheel(0, 100);
+   await expect.poll(async () => (await scroll())[1]).toBeGreaterThan(80);
+   await page.locator('#viewer-fit').click();
+   assert.deepEqual(await scroll(), [0, 0]);
+   await page.locator('#viewer-dialog').press('Escape');await expect(page.locator('#library-dialog')).toBeVisible();
   }
   await page.locator('#library-close').click();await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(1180,800));await page.locator('#open-library').click();await expect(page.locator('#library-status')).toContainText('전체 대화 확인 완료',{timeout:20000});await page.locator('[data-file-filter=all]').click();await page.locator('#library-select-mode').click();await expect(page.locator('#library-content .library-card')).toHaveCount(213);const heights=await page.locator('#library-content .library-card').evaluateAll(cards=>cards.map(card=>card.getBoundingClientRect().height));assert.ok(heights.every(height=>height>=223));await page.locator('#library-select-all').click();await expect(page.locator('#library-selection-count')).toHaveText('213개 선택');await page.locator('#library-clear-selection').click();
   await page.screenshot({path:path.join(root,'test-results/batch-selection-grid.png')});await page.locator('[data-select-file="'+ids[5]+'"]').check();await page.locator('#library-save-selected').click();await expect.poll(()=>slowOpened).toBeGreaterThan(0);await page.locator('#library-cancel-save').click();await expect(page.locator('#library-batch-status')).toContainText('취소됨');assert.ok(!(await fs.readdir(folder)).some(name=>name.endsWith('.part')));
