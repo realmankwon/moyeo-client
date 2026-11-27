@@ -1,6 +1,6 @@
 {
   "name": "moyeo-mattermost-client",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "releaseRepository": "realmankwon/moyeo-client",
   "private": true,
   "description": "A Korean messenger-style desktop client for Mattermost",

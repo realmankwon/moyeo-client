@@ -16,6 +16,11 @@ const me=id('a'),other=id('b'),third=id('c'),team=id('t'),home=id('h'),busy=id('
  const card={id:'0'.repeat(25)+'1',channel_id:home,user_id:other,message:'',create_at:now-5000,props:{attachments:[{color:'#2fa66a',pretext:'배포 알림',author_name:'CI 봇',title:'배포 완료',title_link:'https://example.org/build/1',text:'**main** 브랜치를 배포했습니다.',fields:[{title:'환경',value:'운영',short:true},{title:'소요',value:'3분',short:true}],footer:'ci.example',actions:[{id:'approve',name:'승인',style:'primary'},{id:'reject',name:'반려',style:'danger'}]}]}};
  const table={id:'0'.repeat(25)+'2',channel_id:home,user_id:other,message:'| 항목 | 값 |\n|---|--:|\n| 요청 | 12 |\n\n- [x] 확인 ~busy',create_at:now-4000};
  posts.get(home).push(card,table);
+ // 호출된 방: four posts already read, five unread ones after the last view time.
+ const tall=label=>label+'\n'+Array.from({length:7},(_,line)=>'줄 '+(line+1)).join('\n');
+ for(let index=0;index<9;index++)posts.get(called).push({id:'1'.repeat(25)+index,channel_id:called,user_id:other,message:tall((index<4?'읽은 글 ':'새 글 ')+(index+1)),create_at:now-90000+index*5000});
+ rooms.find(item=>item.id===called).last_post_at=now-90000+8*5000;members.get(called).last_viewed_at=now-90000+3*5000;
+ for(let index=0;index<8;index++)posts.get(home).unshift({id:'2'.repeat(25)+index,channel_id:home,user_id:other,message:tall('홈 글 '+index),create_at:now-200000+index*1000});
  const flagged=new Set();
  const send=(socket,event,data)=>{if(socket.readyState===1&&socket.authenticated)socket.send(JSON.stringify({event,data,broadcast:{},seq:socket.sequence++}));};
  const broadcast=(event,data)=>{for(const socket of websocket.clients)send(socket,event,data);};
@@ -77,6 +82,11 @@ const me=id('a'),other=id('b'),third=id('c'),team=id('t'),home=id('h'),busy=id('
   await expect(row(home).locator('.badge')).toHaveCount(0);await expect(row(muted)).toHaveClass(/is-muted/);
   await expect(page.locator('#incoming-header')).toBeHidden();
 
+  // A fully read room opens at the very bottom and stays there when late content grows it.
+  const gap=()=>page.evaluate(()=>{const area=document.querySelector('#messages');return Math.round(area.scrollHeight-area.scrollTop-area.clientHeight);});
+  await expect.poll(gap).toBeLessThan(3);await expect(page.locator('#unread-divider')).toHaveCount(0);
+  await page.evaluate(()=>{const area=document.querySelector('#messages'),block=document.createElement('div');block.style.height='400px';area.querySelector('.message').append(block);area.dispatchEvent(new Event('scroll'));});
+  await expect.poll(gap).toBeLessThan(3);
   // Bot card, table, task item and ~channel link.
   await expect(page.locator('.bot-card-title')).toHaveText('배포 완료');await expect(page.locator('.bot-card-fields dt')).toHaveText(['환경','소요']);
   await expect(page.locator('.message-table td').first()).toHaveText('요청');await expect(page.locator('.message-task.done')).toContainText('확인');
@@ -109,6 +119,15 @@ const me=id('a'),other=id('b'),third=id('c'),team=id('t'),home=id('h'),busy=id('
   await page.keyboard.press('ControlOrMeta+k');await expect(page.locator('#switcher-dialog')).toBeVisible();await shot('03-switcher');
   await page.locator('#switcher-input').fill('호출');await expect(page.locator('#switcher-list [data-switch]')).toHaveCount(1);await page.locator('#switcher-input').press('Enter');
   await expect(page.locator('.chat-header h2')).toHaveText('호출된 방');await expect(row(called).locator('.badge')).toHaveCount(0);
+
+  // A room with unread messages opens at the first unread one, under a marker.
+  await expect(page.locator('#unread-divider')).toBeVisible();
+  await expect(page.locator('#unread-divider + .message .bubble')).toContainText('새 글 5');
+  const place=await page.evaluate(()=>{const area=document.querySelector('#messages'),box=area.getBoundingClientRect(),mark=document.querySelector('#unread-divider').getBoundingClientRect();return {top:Math.round(mark.top-box.top),gap:Math.round(area.scrollHeight-area.scrollTop-area.clientHeight)};});
+  assert.ok(place.top>=0&&place.top<40,'unread marker should sit at the top of the view: '+JSON.stringify(place));assert.ok(place.gap>100,'view must not jump to the newest message: '+JSON.stringify(place));
+  await shot('03b-unread-entry');
+  await page.locator('[data-channel="'+home+'"]').click();await expect(page.locator('.chat-header h2')).toHaveText('홈');await page.locator('[data-channel="'+called+'"]').click();await expect(page.locator('.chat-header h2')).toHaveText('호출된 방');
+  await expect(page.locator('#unread-divider')).toHaveCount(0);await expect.poll(gap).toBeLessThan(3);
 
   // Browse and join, create a private channel, create a group chat.
   await page.locator('#browse-channels').click();await expect(page.locator('#browse-result .browse-row')).toHaveCount(1);await shot('04-browse');
@@ -152,6 +171,18 @@ const me=id('a'),other=id('b'),third=id('c'),team=id('t'),home=id('h'),busy=id('
   await expect.poll(savedTheme).toBe('dark');
   await page.locator('[data-channel="'+home+'"]').click();await expect(page.locator('.bot-card-title')).toBeVisible();await shot('07-dark-chat');
   assert.notEqual(await page.evaluate(()=>getComputedStyle(document.querySelector('.message:not(.self) .bubble, .bot-card')).backgroundColor),'rgb(255, 255, 255)');
+  // A room theme saved with the stock light colors follows dark mode; a customized one keeps its colors.
+  const paneColors=()=>page.evaluate(()=>({pane:getComputedStyle(document.querySelector('#chat-pane')).backgroundColor,bubble:getComputedStyle(document.querySelector('.message:not(.self) .bubble, .bot-card')).backgroundColor,header:getComputedStyle(document.querySelector('.chat-header')).backgroundColor}));
+  const stock={background:'#e8eef3',accent:'#fee34a',selfText:'#302b16',otherBubble:'#ffffff',otherText:'#252a33',surface:'#ffffff',text:'#252a33',fontSize:13,pattern:'none'};
+  await page.evaluate(([room,theme])=>window.messenger.setRoomTheme(room,theme),[home,stock]);
+  await expect.poll(async()=>(await paneColors()).header).toBe('rgb(28, 31, 37)');assert.equal((await paneColors()).pane,'rgb(20, 22, 26)');
+  await page.locator('#theme-toggle').click();await expect(page.locator('html')).toHaveAttribute('data-theme','light');
+  await expect.poll(async()=>(await paneColors()).header).toBe('rgb(255, 255, 255)');assert.equal((await paneColors()).pane,'rgb(232, 238, 243)');
+  await page.evaluate(([room,theme])=>window.messenger.setRoomTheme(room,theme),[home,{...stock,background:'#ffd0d0'}]);
+  await expect.poll(async()=>(await paneColors()).pane).toBe('rgb(255, 208, 208)');
+  await page.locator('#theme-toggle').click();await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
+  assert.equal((await paneColors()).pane,'rgb(255, 208, 208)');assert.equal((await paneColors()).header,'rgb(255, 255, 255)');
+  await page.evaluate(room=>window.messenger.setRoomTheme(room,null),home);await expect.poll(async()=>(await paneColors()).pane).toBe('rgb(20, 22, 26)');
   await page.locator('#room-info').click();await expect(page.locator('#room-members .room-member')).toHaveCount(2);await shot('08-dark-room-info');await page.locator('#room-close').click();
   await page.locator('#nav-settings').click();await expect(page.locator('[data-theme-choice="dark"]')).toHaveAttribute('aria-pressed','true');await page.locator('[data-theme-choice="system"]').click();
   await expect.poll(savedTheme).toBe('system');await expect(page.locator('html')).toHaveAttribute('data-theme','light');

@@ -1,7 +1,7 @@
 /* Server-backed unread and mention counts plus per-room notification levels. */
 const unreads = (() => {
   // base: counts the server reported at the last sync. extra: posts seen since then.
-  let members = new Map(), base = new Map(), extra = new Map(), grew = new Set(), status = '', loading = null;
+  let members = new Map(), base = new Map(), extra = new Map(), grew = new Set(), seen = new Map(), status = '', loading = null;
   const empty = { count: 0, mentions: 0 };
   function apply(list) {
     const previous = base, next = new Map(), fresh = new Map(), raised = new Set();
@@ -33,12 +33,19 @@ const unreads = (() => {
   }
   function clear(id) {
     const had = counts(id).count > 0 || counts(id).mentions > 0;
+    seen.set(id, Math.max(seen.get(id) || 0, state.channels.find(item => item.id === id)?.last_post_at || 0));
     base.set(id, { count: 0, mentions: 0 }); extra.delete(id); grew.delete(id);
     return had;
   }
   function read(id, time) {
     const channel = state.channels.find(item => item.id === id);
+    seen.set(id, Math.max(seen.get(id) || 0, time));
     if (channel && time >= (channel.last_post_at || 0) && clear(id) && $('#channel-list')) renderChannelList();
+  }
+  // What was unread when a room is opened: how many posts, and the time read up to (0 if unknown).
+  function pending(id) {
+    const legacy = Number(state.unread[id]);
+    return { count: counts(id).count || (Number.isFinite(legacy) ? legacy : 0), since: Math.max(members.get(id)?.last_viewed_at || 0, seen.get(id) || 0) };
   }
   function level(id) {
     const props = members.get(id)?.notify_props;
@@ -73,7 +80,7 @@ const unreads = (() => {
     const epoch = state.generation;
     try { const value = await api.myStatus(); if (epoch === state.generation) status = value; } catch { /* Status may be hidden by server policy. */ }
   }
-  function reset() { members = new Map(); base = new Map(); extra = new Map(); grew = new Set(); status = ''; loading = null; }
+  function reset() { members = new Map(); base = new Map(); extra = new Map(); grew = new Set(); seen = new Map(); status = ''; loading = null; }
   window.messenger?.onRealtime(event => { if (event.type === 'status') status = event.status; });
-  return { load, loadStatus, counts, bump, clear, read, level, setLevel, alerts, badge, any, quiet, reset };
+  return { load, loadStatus, counts, pending, bump, clear, read, level, setLevel, alerts, badge, any, quiet, reset };
 })();

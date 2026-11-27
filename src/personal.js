@@ -25,7 +25,13 @@ const personal = (() => {
     for (const variable of ['--chat-background', '--accent', '--accent-ink', '--bubble-bg', '--bubble-ink', '--pane-surface', '--pane-ink', '--message-size']) pane.style.removeProperty(variable);
     pane.style.removeProperty('background-image'); pane.style.removeProperty('background-size');
     if (!theme) return;
-    for (const [name, value] of Object.entries({ '--chat-background': theme.background, '--accent': theme.accent, '--accent-ink': theme.selfText, '--bubble-bg': theme.otherBubble, '--bubble-ink': theme.otherText, '--pane-surface': theme.surface, '--pane-ink': theme.text, '--message-size': `${theme.fontSize}px` })) pane.style.setProperty(name, value);
+    // A saved theme that still has the stock light or dark surface colors follows the app theme,
+    // so switching light/dark never leaves a white room in dark mode or a black one in light mode.
+    // Only a room whose surfaces were really customized keeps its own colors in both modes.
+    const same = (value, ...defaults) => defaults.some(item => String(value || '').toLowerCase() === String(item).toLowerCase());
+    const stock = same(theme.background, state.settings.chatBackground, '#e8eef3', '#14161a') && same(theme.otherBubble, '#ffffff', '#262a31') && same(theme.otherText, '#252a33', '#e8ebf0') && same(theme.surface, '#ffffff', '#1c1f25') && same(theme.text, '#252a33', '#e8ebf0');
+    const surfaces = stock ? {} : { '--chat-background': theme.background, '--bubble-bg': theme.otherBubble, '--bubble-ink': theme.otherText, '--pane-surface': theme.surface, '--pane-ink': theme.text };
+    for (const [name, value] of Object.entries({ ...surfaces, '--accent': theme.accent, '--accent-ink': theme.selfText, '--message-size': `${theme.fontSize}px` })) pane.style.setProperty(name, value);
     if (theme.pattern === 'dots') { pane.style.backgroundImage = 'radial-gradient(#8390a530 1px, transparent 1px)'; pane.style.backgroundSize = '16px 16px'; }
   }
   async function storeTheme(room, theme, all, replaceRooms) {

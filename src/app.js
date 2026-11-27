@@ -73,6 +73,7 @@ function applySettings() {
   // A chat background the user never changed follows the theme; a chosen color is kept as is.
   document.documentElement.style.setProperty('--chat-background', dark && String(state.settings.chatBackground).toLowerCase() === DEFAULT_CHAT_BACKGROUND ? '#14161a' : state.settings.chatBackground);
   paintThemeToggle();
+  if (typeof personal !== 'undefined' && $('#chat-pane')) personal.apply();
   const hex = state.settings.accent.slice(1);
   const rgb = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16));
   document.documentElement.style.setProperty('--accent-ink', (rgb[0] * .299 + rgb[1] * .587 + rgb[2] * .114) > 150 ? '#302b16' : '#ffffff');
@@ -290,12 +291,13 @@ function renderChannelList() {
 async function selectChannel(id) {
   historyPositionCleanup();
   const loading=state.loadingTicket=(state.loadingTicket||0)+1;state.channelLoading=true;
-  state.postFocus = null;
+  state.postFocus = null; state.unreadMarker = null;
+  const pending = unreads.pending(id);
   incoming.markRead(id);
   state.selected = id; state.posts = []; state.hasMore = true;state.historyLoading=false;state.historyCursor=null; delete state.unread[id];
   if(!state.demo)api?.setCurrentChannel(id,channelName(state.channels.find(channel=>channel.id===id))).catch(()=>{});
   renderChannelList(); renderChat();
-  if (state.demo) { state.posts = state.demoPosts[id] || []; state.hasMore = false; renderMessages(true);state.channelLoading=false; return; }
+  if (state.demo) { state.posts = state.demoPosts[id] || []; state.hasMore = false; showLatestOrUnread(id, pending);state.channelLoading=false; return; }
   try {
     const epoch = state.generation;
     const result = await api.posts(id);
@@ -304,10 +306,28 @@ async function selectChannel(id) {
     state.posts = Object.values(result.posts).filter(p => !p.delete_at).sort((a, b) => a.create_at - b.create_at);
     state.hasMore = result.order.length === 60;
     state.previews[id] = state.posts.at(-1)?.message || botAttachments.summary(state.posts.at(-1)) || '';
-    renderMessages(true); renderChannelList();
+    showLatestOrUnread(id, pending); renderChannelList();
     await api.view(id);
   } catch (error) { if (state.selected === id) toast(error.message); }
   finally{if(loading===state.loadingTicket){state.channelLoading=false;if(!isFloating)api?.incomingReady().catch(()=>{});if(typeof realtime!=='undefined')realtime.ready();}}
+}
+// A room with unread messages opens at the first of them; a fully read room opens at the bottom.
+function showLatestOrUnread(id, pending) {
+  let first = null;
+  if (pending?.count > 0 && state.posts.length) {
+    if (pending.since) first = state.posts.find(post => post.create_at > pending.since && post.user_id !== state.me.id);
+    first ||= state.posts[Math.max(0, state.posts.length - pending.count)];
+  }
+  if (!first) { renderMessages(true); return; }
+  state.unreadMarker = { channel: id, post: first.id };
+  renderMessages();
+  const area = $('#messages'), divider = $('#unread-divider');
+  if (!area || !divider) { if (area) area.scrollTop = area.scrollHeight; return; }
+  const top = area.getBoundingClientRect().top;
+  area.scrollTop += divider.getBoundingClientRect().top - top - 10;
+  const anchor = area.querySelector(`[data-message-id="${CSS.escape(first.id)}"]`);
+  // Keeps the first unread message in place while late images above or below it load.
+  if (anchor) retainHistoryPosition(area, { id: first.id, offset: (anchor.querySelector('.bubble-row') || anchor).getBoundingClientRect().top - top });
 }
 function renderChat() {
   const channel = state.channels.find(c => c.id === state.selected);
@@ -362,22 +382,30 @@ function watchHistory(area){historyCleanup();if(!state.hasMore||state.demo)retur
 function followMessageScroll(area, follow) {
   scrollCleanup();
   if (typeof typingIndicator !== 'undefined') typingIndicator.reset();
-  let pinned = follow, frame = 0;
+  let pinned = follow, frame = 0, intent = 0, dragging = false;
   const bottom = () => area.scrollHeight - area.scrollTop - area.clientHeight < 100;
-  const onScroll = () => { pinned = bottom(); };
-  const onWheel = event => { if (event.deltaY < 0) pinned = false; };
+  // Late images and previews grow the list and fire scroll events of their own. Only scrolling
+  // the user started may release the bottom lock, otherwise the view is left stranded above it.
+  const onScroll = () => { if (bottom()) pinned = true; else if (dragging || performance.now() - intent < 1200) pinned = false; };
+  const onWheel = event => { intent = performance.now(); if (event.deltaY < 0) pinned = false; };
+  const onIntent = () => { intent = performance.now(); };
+  const onDown = () => { dragging = true; intent = performance.now(); };
+  const onUp = () => { dragging = false; intent = performance.now(); };
   const settle = () => { if (!pinned) return; cancelAnimationFrame(frame); frame = requestAnimationFrame(() => { if (pinned && area.isConnected) area.scrollTop = area.scrollHeight; }); };
   const observer = new ResizeObserver(settle);
   observer.observe(area); for (const child of area.children) observer.observe(child);
   area.addEventListener('scroll', onScroll, { passive: true });
   area.addEventListener('wheel', onWheel, { passive: true });
+  area.addEventListener('touchmove', onIntent, { passive: true }); area.addEventListener('keydown', onIntent);
+  area.addEventListener('pointerdown', onDown, { passive: true }); addEventListener('pointerup', onUp, { passive: true });
   area.addEventListener('load', settle, true); area.addEventListener('loadedmetadata', settle, true);
-  scrollCleanup = () => { observer.disconnect(); cancelAnimationFrame(frame); area.removeEventListener('scroll', onScroll); area.removeEventListener('wheel', onWheel); area.removeEventListener('load', settle, true); area.removeEventListener('loadedmetadata', settle, true); };
+  scrollCleanup = () => { observer.disconnect(); cancelAnimationFrame(frame); area.removeEventListener('scroll', onScroll); area.removeEventListener('wheel', onWheel); area.removeEventListener('touchmove', onIntent); area.removeEventListener('keydown', onIntent); area.removeEventListener('pointerdown', onDown); removeEventListener('pointerup', onUp); area.removeEventListener('load', settle, true); area.removeEventListener('loadedmetadata', settle, true); };
 }
 function renderMessages(scroll = false) {
   const area = $('#messages'); if (!area) return;
   const oldHeight = area.scrollHeight, oldTop = area.scrollTop, atBottom = oldHeight - oldTop - area.clientHeight < 100;
   let lastDate = '', lastMinute = null, lastAuthor = null, lastAt = 0;
+  const unreadFrom = state.unreadMarker?.channel === state.selected ? state.unreadMarker.post : null;
   area.innerHTML = `${state.hasMore && !state.demo ? '<div class="history-sentinel" id="history-sentinel" role="status">이전 대화</div>' : ''}` + state.posts.map(post => {
     const date = new Date(post.create_at).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
     const divider = date !== lastDate ? `<div class="date-divider">${esc(date)}</div>` : ''; lastDate = date;
@@ -385,8 +413,9 @@ function renderMessages(scroll = false) {
     const attachmentMarkup = media.attachments(post), cards = botAttachments.markup(post);
     const message = post.message || (attachmentMarkup || cards ? '' : '(시스템 메시지)');
     const minute = Math.floor(post.create_at / 60000), showTime = minute !== lastMinute; lastMinute = minute;
-    const continued = !divider && post.user_id === lastAuthor && post.create_at - lastAt < 300000; lastAuthor = post.user_id; lastAt = post.create_at;
-    return `${divider}<article class="message ${self ? 'self' : ''} ${continued ? 'continued' : ''} ${post.type === 'system_ephemeral' ? 'ephemeral' : ''}" data-message-id="${esc(post.id)}" tabindex="0">${self ? '' : accountAvatar(post.user_id, true)}<div class="message-content">${self ? '' : `<div class="sender">${userStatus.name(state.users[post.user_id])}</div>`}${messageActions.reference(post)}<div class="bubble-row ${message ? '' : 'media-only'}">${message ? `<div class="bubble rich-text" data-message="${esc(message)}">${composer.format(message)}</div>` : attachmentMarkup}${showTime ? `<time datetime="${new Date(post.create_at).toISOString()}">${clock(post.create_at)}</time>` : ''}</div>${message ? attachmentMarkup : ''}${cards}${post.type === 'system_ephemeral' ? '<span class="ephemeral-label">나에게만 보이는 메시지</span>' : ''}${linkPreviews.markup(post)}${messageActions.annotation(post)}${reactions.markup(post)}</div></article>`;
+    const fresh = post.id === unreadFrom ? '<div class="unread-divider" id="unread-divider" role="separator"><span>여기부터 읽지 않은 메시지</span></div>' : '';
+    const continued = !divider && !fresh && post.user_id === lastAuthor && post.create_at - lastAt < 300000; lastAuthor = post.user_id; lastAt = post.create_at;
+    return `${divider}${fresh}<article class="message ${self ? 'self' : ''} ${continued ? 'continued' : ''} ${post.type === 'system_ephemeral' ? 'ephemeral' : ''}" data-message-id="${esc(post.id)}" tabindex="0">${self ? '' : accountAvatar(post.user_id, true)}<div class="message-content">${self ? '' : `<div class="sender">${userStatus.name(state.users[post.user_id])}</div>`}${messageActions.reference(post)}<div class="bubble-row ${message ? '' : 'media-only'}">${message ? `<div class="bubble rich-text" data-message="${esc(message)}">${composer.format(message)}</div>` : attachmentMarkup}${showTime ? `<time datetime="${new Date(post.create_at).toISOString()}">${clock(post.create_at)}</time>` : ''}</div>${message ? attachmentMarkup : ''}${cards}${post.type === 'system_ephemeral' ? '<span class="ephemeral-label">나에게만 보이는 메시지</span>' : ''}${linkPreviews.markup(post)}${messageActions.annotation(post)}${reactions.markup(post)}</div></article>`;
   }).join('') || '<div class="empty">아직 메시지가 없어요.<br>첫 인사를 건네보세요.</div>';
   if (scroll) area.scrollTop = area.scrollHeight;
   else area.scrollTop = oldTop + area.scrollHeight - oldHeight;

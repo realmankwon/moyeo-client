@@ -42,6 +42,10 @@ const chatWindows = new ChatWindows(electron,client,page);
 let win, desktop;
 const defaults = { name: '모여', accent: '#fee34a', chatBackground: '#e8eef3', logo: '', chatIcon: '', peopleIcon: '', settingsIcon: '', soundEnabled: true, autoLogin: true, theme: 'system' };
 const themeSource = value => ['light', 'dark'].includes(value) ? value : 'system';
+// The native window color shows during load and resize, so it follows the theme too.
+const paintWindows = () => { const color = electron.nativeTheme.shouldUseDarkColors ? '#1c1f25' : '#f8f9fb'; for (const item of BrowserWindow.getAllWindows()) if (!item.isDestroyed()) item.setBackgroundColor(color); };
+app.whenReady().then(() => { electron.nativeTheme.on('updated', paintWindows); paintWindows(); });
+app.on('browser-window-created', () => { if (app.isReady()) setImmediate(paintWindows); });
 app.on('second-instance', (_event, argv) => { if (process.platform === 'win32' && argv.includes('--quit-for-install')) app.quit(); else desktop?.show(); });
 app.on('activate', () => desktop?.show());
 function handle(name, fn) {

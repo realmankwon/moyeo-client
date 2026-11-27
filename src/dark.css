@@ -628,6 +628,9 @@
 :where(:root[data-theme="dark"]) .room-role,:where(:root[data-theme="dark"]) .group-chip{background:color-mix(in srgb,var(--accent) 30%,var(--surface));color:var(--ink)}
 :where(:root[data-theme="dark"]) .room-member em{background:var(--surface-3);color:var(--ink-2)}
 :where(:root[data-theme="dark"]) .message:hover .bubble{box-shadow:0 1px 1.5px color-mix(in srgb,var(--shadow) 9%,transparent),0 0 0 1px color-mix(in srgb,var(--ink) 6%,transparent)}
+:where(:root[data-theme="dark"]) .unread-divider{color:var(--danger)}
+:where(:root[data-theme="dark"]) .unread-divider::before,:where(:root[data-theme="dark"]) .unread-divider::after{background:color-mix(in srgb,var(--danger) 45%,transparent)}
+:where(:root[data-theme="dark"]) .unread-divider span{background:color-mix(in srgb,var(--danger) 12%,var(--surface))}
 /* scripts/dark-overrides.css */
 :root[data-theme="dark"]{--surface:#1c1f25;--surface-2:#252930;--surface-3:#2e333c;--rail:#15171c;--line:#31363f;--line-soft:#282c34;--ink:#e8ebf0;--ink-2:#aeb7c4;--ink-3:#7c8695;--shadow:#000000;--danger:#f0565b;color-scheme:dark}
 :root[data-theme="dark"] body{background:#1c1f25}
