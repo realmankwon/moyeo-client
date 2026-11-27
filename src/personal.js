@@ -18,7 +18,7 @@ const personal = (() => {
   }
   const get = field => data[field];
   function toggle(field, value) { const epoch = state.generation; const task = toggleQueue.catch(() => {}).then(async () => { if (epoch !== state.generation) return; const values = data[field]; await save(field, values.includes(value) ? values.filter(item => item !== value) : [value, ...values]); }); toggleQueue = task; return task; }
-  const base = () => ({ background: state.settings.chatBackground, accent: state.settings.accent, selfText: getComputedStyle(document.documentElement).getPropertyValue('--accent-ink').trim() || '#302b16', otherBubble: '#ffffff', otherText: '#252a33', surface: '#ffffff', text: '#252a33', fontSize: 13, pattern: 'none' });
+  const base = () => ({ background: state.settings.chatBackground, accent: state.settings.accent, selfText: getComputedStyle(document.documentElement).getPropertyValue('--accent-ink').trim() || '#302b16', ...(typeof activeTheme === 'function' && activeTheme() === 'dark' ? { background: String(state.settings.chatBackground).toLowerCase() === '#e8eef3' ? '#14161a' : state.settings.chatBackground, otherBubble: '#262a31', otherText: '#e8ebf0', surface: '#1c1f25', text: '#e8ebf0' } : { otherBubble: '#ffffff', otherText: '#252a33', surface: '#ffffff', text: '#252a33' }), fontSize: 13, pattern: 'none' });
   function apply(override) {
     const pane = $('#chat-pane'); if (!pane) return;
     const theme = override || data.roomThemes[state.selected] || data.globalTheme;

@@ -1,0 +1,20 @@
+/* Token values for the refined shell and fixes the automatic conversion cannot infer. */
+:root[data-theme="dark"]{--surface:#1c1f25;--surface-2:#252930;--surface-3:#2e333c;--rail:#15171c;--line:#31363f;--line-soft:#282c34;--ink:#e8ebf0;--ink-2:#aeb7c4;--ink-3:#7c8695;--shadow:#000000;--danger:#f0565b;color-scheme:dark}
+:root[data-theme="dark"] body{background:#1c1f25}
+:root[data-theme="dark"] .login-page{background:#1c1f25}
+:root[data-theme="dark"] .login-story{background:#15171c}
+:root[data-theme="dark"] dialog::backdrop{background:#000000a0}
+:root[data-theme="dark"] .bubble{box-shadow:0 1px 1.5px #00000055}
+:root[data-theme="dark"] .self .bubble{box-shadow:0 1px 1.5px #00000066}
+:root[data-theme="dark"] .date-divider{background:#ffffff14;color:#aeb7c4}
+:root[data-theme="dark"] .nav-button.active{box-shadow:0 0 0 1px #3a404a}
+:root[data-theme="dark"] .message-code{background:#12141a;color:#dfe6f0;border:1px solid #2b3038}
+:root[data-theme="dark"] .message-link{color:#7fb0f0}
+:root[data-theme="dark"] .mail-notice,:root[data-theme="dark"] .bot-card{background:#232830;border-color:#343a45;color:#e2e6ec}
+:root[data-theme="dark"] .bot-card{border-left-color:var(--bot-card-color,#5b6677)}
+:root[data-theme="dark"] .default-brand{filter:none}
+:root[data-theme="dark"] img.inline-emoji,:root[data-theme="dark"] .account-avatar img{filter:none}
+:root[data-theme="dark"] .rail .brandmark,:root[data-theme="dark"] .brand .brandmark{box-shadow:none}
+:root[data-theme="dark"] .chat-pane .bubble{background:var(--bubble-bg,#262a31);color:var(--bubble-ink,#e8ebf0)}
+:root[data-theme="dark"] .chat-pane .self .bubble{background:var(--accent);color:var(--accent-ink)}
+:root[data-theme="dark"] .chat-pane{color:var(--pane-ink,#e8ebf0)}

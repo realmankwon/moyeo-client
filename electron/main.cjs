@@ -40,7 +40,8 @@ const client = new MattermostClient();
 const page = pathToFileURL(path.join(__dirname, '../src/index.html')).href;
 const chatWindows = new ChatWindows(electron,client,page);
 let win, desktop;
-const defaults = { name: '모여', accent: '#fee34a', chatBackground: '#e8eef3', logo: '', chatIcon: '', peopleIcon: '', settingsIcon: '', soundEnabled: true, autoLogin: true };
+const defaults = { name: '모여', accent: '#fee34a', chatBackground: '#e8eef3', logo: '', chatIcon: '', peopleIcon: '', settingsIcon: '', soundEnabled: true, autoLogin: true, theme: 'system' };
+const themeSource = value => ['light', 'dark'].includes(value) ? value : 'system';
 app.on('second-instance', (_event, argv) => { if (process.platform === 'win32' && argv.includes('--quit-for-install')) app.quit(); else desktop?.show(); });
 app.on('activate', () => desktop?.show());
 function handle(name, fn) {
@@ -198,7 +199,10 @@ if (singleInstance) app.whenReady().then(async () => {
     for (const key of ['accent', 'chatBackground']) if (/^#[a-f\d]{6}$/i.test(value[key])) settings[key] = value[key];
     if (typeof value.soundEnabled === 'boolean') settings.soundEnabled = value.soundEnabled;
     if (typeof value.autoLogin === 'boolean') settings.autoLogin = value.autoLogin;
+    if (['system', 'light', 'dark'].includes(value.theme)) settings.theme = value.theme;
     if (value.reset) Object.assign(settings, defaults);
+    electron.nativeTheme.themeSource = themeSource(settings.theme);
+    chatWindows.broadcast('settings:theme', themeSource(settings.theme));
     if (typeof value.startAtLogin === 'boolean') startup.set(value.startAtLogin);
     if (!settings.autoLogin) await sessions.clear();
     else if (client.me) await sessions.save(client);
@@ -223,6 +227,7 @@ if (singleInstance) app.whenReady().then(async () => {
     return { ...settings, startAtLogin: startup.get(), platform: process.platform };
   });
   readSettings().then(settings => {
+    electron.nativeTheme.themeSource = themeSource(settings.theme);
     if (win.isDestroyed()) return;
     win.setTitle(`${settings.name} · Mattermost`);
     desktop.configure(settings);

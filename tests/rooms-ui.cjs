@@ -66,7 +66,7 @@ const me=id('a'),other=id('b'),third=id('c'),team=id('t'),home=id('h'),busy=id('
   app=await electron.launch({args:[root,'--user-data-dir='+profile],env,timeout:30000});const page=await app.firstWindow();
   await app.evaluate(({safeStorage,Tray,BrowserWindow})=>{safeStorage.isAsyncEncryptionAvailable=async()=>true;safeStorage.encryptStringAsync=async text=>Buffer.from('fixture:'+text);safeStorage.decryptStringAsync=async value=>({result:value.toString().slice(8),shouldReEncrypt:false});Tray.prototype.displayBalloon=function(){};const win=BrowserWindow.getAllWindows()[0];win.isFocused=()=>win.isVisible()&&!win.isMinimized();});
   page.setDefaultTimeout(15000);await page.evaluate(()=>{HTMLMediaElement.prototype.play=()=>Promise.resolve();});
-  const shot=name=>page.screenshot({path:path.join(profile,name+'.png')});
+  const shot=async name=>{await page.waitForTimeout(300);await page.screenshot({path:path.join(profile,name+'.png')});}; // lets the dialog fade-in finish
   await page.locator('[name=server]').fill('127.0.0.1:'+server.address().port);await page.locator('[name=login]').fill('tester');await page.locator('[name=password]').fill('fixture');await page.getByRole('button',{name:'연결하기',exact:true}).click();
   await expect(page.locator('.chat-header h2')).toHaveText('홈');await expect.poll(()=>page.evaluate(()=>realtime.isConnected())).toBe(true);
   const row=key=>page.locator('.conversation-row:has([data-channel="'+key+'"])');
@@ -140,6 +140,21 @@ const me=id('a'),other=id('b'),third=id('c'),team=id('t'),home=id('h'),busy=id('
   // Leaving needs a second click.
   await page.locator('#room-info').click();await page.locator('#room-leave').click();assert.equal(made('DELETE','/channels/'+mentionOnly+'/members/'+me).length,0);
   await page.locator('#room-leave').click();await expect.poll(()=>made('DELETE','/channels/'+mentionOnly+'/members/'+me).length).toBe(1);await expect(row(mentionOnly)).toHaveCount(0);
+  // Dark mode: the rail switch applies at once and is remembered.
+  const savedTheme=async()=>{try{return JSON.parse(await fs.readFile(path.join(profile,'appearance.json'),'utf8')).theme;}catch{return null;}}; // the file may be mid-write
+  await app.evaluate(({nativeTheme})=>{nativeTheme.themeSource='light';});
+  const surface=()=>page.evaluate(()=>getComputedStyle(document.querySelector('.conversation-list')).backgroundColor);
+  await page.locator('#nav-settings').click();await page.locator('[data-theme-choice="light"]').click();await expect(page.locator('html')).toHaveAttribute('data-theme','light');await page.locator('#settings-close').click();
+  assert.equal(await surface(),'rgb(255, 255, 255)');
+  await page.locator('#theme-toggle').click();await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
+  assert.equal(await surface(),'rgb(28, 31, 37)');
+  assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--chat-background').trim()),'#14161a');
+  await expect.poll(savedTheme).toBe('dark');
+  await page.locator('[data-channel="'+home+'"]').click();await expect(page.locator('.bot-card-title')).toBeVisible();await shot('07-dark-chat');
+  assert.notEqual(await page.evaluate(()=>getComputedStyle(document.querySelector('.message:not(.self) .bubble, .bot-card')).backgroundColor),'rgb(255, 255, 255)');
+  await page.locator('#room-info').click();await expect(page.locator('#room-members .room-member')).toHaveCount(2);await shot('08-dark-room-info');await page.locator('#room-close').click();
+  await page.locator('#nav-settings').click();await expect(page.locator('[data-theme-choice="dark"]')).toHaveAttribute('aria-pressed','true');await page.locator('[data-theme-choice="system"]').click();
+  await expect.poll(savedTheme).toBe('system');await expect(page.locator('html')).toHaveAttribute('data-theme','light');
   console.log('Rooms UI checks passed. Screenshots: '+profile);
  }finally{await app?.close().catch(()=>{});await new Promise(resolve=>{for(const socket of websocket.clients)socket.terminate();server.close(resolve);});}
 })().catch(error=>{console.error(error);process.exit(1);});

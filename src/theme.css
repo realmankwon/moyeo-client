@@ -1,0 +1,193 @@
+/* Refined shell. Colors here come from tokens so the dark theme only swaps the token values
+   (see scripts/dark-overrides.css); older stylesheets are converted by scripts/generate-dark.cjs. */
+:root{--surface:#ffffff;--surface-2:#f4f5f8;--surface-3:#eceef3;--rail:#f1f2f6;--line:#e4e7ed;--line-soft:#eef0f4;--ink:#1e2530;--ink-2:#566171;--ink-3:#909bab;--shadow:#1f2a3d;--danger:#e5484d;color-scheme:light}
+body{font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI","Malgun Gothic",sans-serif;color:var(--ink);background:var(--surface);letter-spacing:-.01em;text-rendering:optimizeLegibility}
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{border:3px solid transparent;border-radius:10px;background:color-mix(in srgb,var(--ink-3) 45%,transparent);background-clip:content-box}
+*::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--ink-3) 75%,transparent);background-clip:content-box}
+.list-scroll::-webkit-scrollbar{width:10px}
+.list-scroll::-webkit-scrollbar-thumb,.list-scroll::-webkit-scrollbar-thumb:hover{border:3px solid transparent;background-clip:content-box}
+::selection{background:color-mix(in srgb,var(--accent) 55%,transparent)}
+
+/* Rail */
+body:not(.floating) .shell{grid-template-columns:64px 320px minmax(0,1fr)}
+.rail{background:var(--rail);border-right:1px solid var(--line);padding:14px 0 12px;gap:14px}
+.rail .brandmark{width:34px;height:34px;border-radius:11px}
+.rail-nav{gap:4px;margin-top:8px}
+.nav-button{position:relative;width:48px;height:46px;gap:3px;border-radius:12px;color:var(--ink-3);font-size:9.5px;font-weight:550}
+.nav-button svg,.nav-button img{width:20px;height:20px}
+.nav-button:hover:not(.active){background:color-mix(in srgb,var(--ink) 6%,transparent);color:var(--ink-2)}
+.nav-button.active{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px color-mix(in srgb,var(--shadow) 10%,transparent),0 0 0 1px var(--line)}
+.nav-button.active::before{content:"";position:absolute;left:-8px;top:50%;width:3px;height:18px;border-radius:0 3px 3px 0;background:var(--accent);transform:translateY(-50%)}
+.rail-bottom{gap:6px;justify-items:center}
+.rail-bottom .icon-btn{width:36px;height:36px;color:var(--ink-3)}
+.rail-bottom .icon-btn:hover{background:color-mix(in srgb,var(--ink) 6%,transparent);color:var(--ink-2)}
+.rail-bottom .icon-btn svg{width:19px;height:19px}
+
+/* Conversation list */
+.conversation-list{background:var(--surface);border-right:1px solid var(--line)}
+.list-head{padding:16px 16px 10px;border-bottom:0}
+.heading-row h1{font-size:19px;font-weight:750;letter-spacing:-.03em;color:var(--ink)}
+.heading-row h1 span{height:19px;min-width:21px;border-radius:6px;background:var(--surface-3);color:var(--ink-3)}
+#new-chat{width:30px;height:30px;border-radius:10px;box-shadow:none}
+.heading-row .list-action{width:30px;height:30px;border-radius:10px;border-color:var(--line);background:var(--surface);color:var(--ink-2)}
+.heading-row .list-action:hover{background:var(--surface-2);color:var(--ink)}
+.search{margin-top:12px;border:1px solid transparent;border-radius:10px;background:var(--surface-2)}
+.search input{color:var(--ink);font-size:12px}
+.search input::placeholder{color:var(--ink-3)}
+.search svg{color:var(--ink-3)}
+.search:focus-within{background:var(--surface);border-color:color-mix(in srgb,var(--accent) 70%,var(--line));box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+.tabs{margin-top:10px;padding:3px;border-radius:10px;background:var(--surface-2)}
+.tabs>.tab{padding:6px 8px;border-radius:8px;font-size:11px;color:var(--ink-3)}
+.tabs>.tab.active{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px color-mix(in srgb,var(--shadow) 12%,transparent)}
+.tabs>.tab:hover:not(.active){background:transparent;color:var(--ink-2)}
+.list-scroll{padding:2px 8px 10px}
+.list-section{margin-bottom:4px}
+.list-section-title{padding:12px 10px 4px;color:var(--ink-3);font-size:10.5px;font-weight:650;letter-spacing:.02em}
+.list-section-title::after{display:none}
+.list-section-title>svg{color:var(--ink-3)}
+.list-section-title .section-count{margin-left:auto;background:transparent;color:var(--ink-3);font-size:10px}
+.conversation-row{margin:1px 0;border:0;border-radius:12px}
+.conversation-row:hover{background:var(--surface-2)}
+.conversation-row.is-selected{background:var(--surface-3);border:0;box-shadow:none}
+.conversation-row.is-selected::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 3px 3px 0;background:var(--accent)}
+.conversation-list .chat-row{min-height:60px;padding:9px 30px 9px 12px;gap:11px}
+.chat-row>.avatar{width:40px;height:40px;border-radius:14px;box-shadow:none}
+.row-title{font-size:13px;font-weight:620;color:var(--ink);letter-spacing:-.02em}
+.has-unread .row-title{font-weight:760;color:var(--ink)}
+.row-time{color:var(--ink-3);font-size:10px}
+.row-preview,.is-selected .row-preview{color:var(--ink-3);font-size:11.5px}
+.conversation-row.has-unread .row-preview{color:var(--ink-2)}
+.row-context{background:var(--surface-3);color:var(--ink-3)}
+.conversation-row.is-selected .row-context{background:color-mix(in srgb,var(--ink) 8%,transparent)}
+.row-detail .badge{background:var(--danger);box-shadow:none}
+.row-detail .badge.badge-mention{background:var(--danger);box-shadow:0 0 0 2px color-mix(in srgb,var(--danger) 22%,transparent)}
+.row-detail .badge.badge-muted{background:var(--ink-3)}
+.channel-type-badge{border-color:var(--surface);background:var(--surface-2);color:var(--ink-3)}
+.conversation-row:hover .channel-type-badge{border-color:var(--surface-2)}
+.conversation-row.is-selected .channel-type-badge{border-color:var(--surface-3)}
+.list-section[data-section=new-messages]{margin-top:6px;padding:0 0 2px;border:0;border-radius:12px;background:color-mix(in srgb,var(--accent) 12%,var(--surface))}
+.list-section[data-section=new-messages] .list-section-title{color:color-mix(in srgb,var(--accent) 45%,var(--ink))}
+.list-section[data-section=new-messages] .section-count{background:transparent;color:inherit}
+.list-section[data-section=new-messages] .conversation-row:hover{background:color-mix(in srgb,var(--accent) 16%,var(--surface))}
+.list-footer{padding:9px 16px;border-top:1px solid var(--line-soft);background:var(--surface);color:var(--ink-3);font-size:10px}
+
+/* Chat header */
+.chat-pane .chat-header{min-height:58px;padding:9px 16px 9px 18px;gap:11px;border-bottom:1px solid var(--line);background:var(--pane-surface,var(--surface))}
+.chat-header>.avatar{width:36px;height:36px;border-radius:12px}
+.chat-header h2{font-size:15px;font-weight:720;letter-spacing:-.02em;margin-bottom:2px}
+.chat-header p{font-size:11px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-header .header-actions{gap:2px;align-items:center}
+.chat-header .header-actions .icon-btn{width:32px;height:32px;border-radius:9px;color:var(--ink-2)}
+.chat-header .header-actions .icon-btn:hover{background:color-mix(in srgb,var(--ink) 7%,transparent);color:var(--ink)}
+.chat-header .header-actions .secondary{height:30px;margin:0 3px;padding:0 11px;border:0;border-radius:9px;background:color-mix(in srgb,var(--ink) 6%,transparent);color:var(--ink-2);font-size:11.5px;font-weight:600;white-space:nowrap}
+.chat-header .header-actions .secondary:hover:not(:disabled){background:color-mix(in srgb,var(--ink) 11%,transparent);color:var(--ink)}
+#room-info{color:var(--ink-2)}
+.navigation-back{border-color:var(--line);color:var(--ink-2)}
+
+/* Messages */
+.messages{padding:16px 20px 10px}
+.message{gap:9px;margin-bottom:8px}
+.message>.avatar.small{width:34px;height:34px;border-radius:12px}
+.sender{margin:0 0 4px 2px;font-size:11.5px;font-weight:620;color:color-mix(in srgb,var(--pane-ink,var(--ink)) 72%,transparent)}
+.bubble{padding:8px 12px;border-radius:5px 16px 16px 16px;line-height:1.6;box-shadow:0 1px 1.5px color-mix(in srgb,var(--shadow) 9%,transparent)}
+.self .bubble{border-radius:16px 5px 16px 16px;box-shadow:0 1px 1.5px color-mix(in srgb,var(--shadow) 12%,transparent)}
+.message.continued .bubble{border-radius:16px}
+.message time{font-size:9.5px;color:color-mix(in srgb,var(--pane-ink,var(--ink)) 45%,transparent)}
+.date-divider{padding:4px 12px;background:color-mix(in srgb,var(--surface) 72%,transparent);color:var(--ink-2);font-size:10.5px;font-weight:550;box-shadow:none}
+.demo-banner{background:color-mix(in srgb,var(--surface) 60%,transparent);color:var(--ink-2)}
+.history-sentinel{color:color-mix(in srgb,var(--pane-ink,var(--ink)) 45%,transparent)}
+.typing-indicator{margin:0 14px;padding:4px 10px;border-radius:9px 9px 0 0;background:transparent;color:color-mix(in srgb,var(--pane-ink,var(--ink)) 60%,transparent)}
+
+/* Composer as a floating card */
+.chat-pane .composer-wrap{margin:0 14px 12px;padding:8px 12px 9px;border:1px solid var(--line);border-radius:16px;box-shadow:0 2px 10px color-mix(in srgb,var(--shadow) 6%,transparent);transition:border-color .15s ease,box-shadow .15s ease}
+.chat-pane .composer-wrap:focus-within{border-color:color-mix(in srgb,var(--accent) 75%,var(--line));box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent),0 2px 10px color-mix(in srgb,var(--shadow) 6%,transparent)}
+body.floating .chat-pane .composer-wrap{margin:0 10px 10px;padding:8px 12px}
+.format-toolbar{gap:2px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--line-soft)}
+.format-button{width:28px;height:26px;border-radius:7px;color:var(--ink-3)}
+.format-button:hover{background:color-mix(in srgb,var(--ink) 7%,transparent);color:var(--ink)}
+.preview-toggle{color:var(--ink-3)}
+.preview-toggle[aria-pressed=true]{background:color-mix(in srgb,var(--ink) 8%,transparent);color:var(--ink)}
+.composer-wrap textarea{height:50px;color:inherit}
+.composer-wrap textarea::placeholder{color:var(--ink-3)}
+.composer-bottom{gap:4px}
+.composer-bottom .icon-btn{width:32px;height:32px;border-radius:9px;color:var(--ink-2)}
+.composer-bottom .icon-btn:hover{background:color-mix(in srgb,var(--ink) 7%,transparent);color:var(--ink)}
+.composer-bottom .icon-btn svg{width:19px;height:19px}
+.composer-bottom .hint{color:var(--ink-3)}
+.send-btn{padding:8px 18px;border-radius:10px}
+.context-notice{margin:0 14px 6px;border-radius:10px}
+
+/* Dialogs, fields and buttons */
+dialog{border:1px solid var(--line);border-radius:18px;padding:24px;background:var(--surface);color:var(--ink);box-shadow:0 24px 70px color-mix(in srgb,var(--shadow) 22%,transparent)}
+.dialog-head h2{font-size:18px;font-weight:740;letter-spacing:-.03em}
+.dialog-head .icon-btn{width:32px;height:32px;border-radius:9px;color:var(--ink-2)}
+.dialog-head .icon-btn:hover{background:var(--surface-2)}
+.section-label{color:var(--ink-3);font-weight:650}
+input,textarea,select{border-color:var(--line);background:var(--surface);color:var(--ink)}
+input::placeholder,textarea::placeholder{color:var(--ink-3)}
+.secondary{border-color:var(--line);border-radius:9px;color:var(--ink)}
+.secondary:hover:not(:disabled){background:var(--surface-2);border-color:color-mix(in srgb,var(--ink-3) 55%,var(--line))}
+.primary{border-radius:10px}
+.segmented{background:var(--surface-2)}
+.segmented button{color:var(--ink-2)}
+.segmented button small{color:var(--ink-3)}
+.segmented button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px color-mix(in srgb,var(--shadow) 14%,transparent),0 0 0 1px var(--line)}
+.message-context-menu{border-color:var(--line);background:var(--surface);color:var(--ink)}
+#toast{border-radius:12px;padding:11px 18px}
+.empty,.empty-pane p{color:var(--ink-3)}
+
+/* New message banner */
+#incoming-header{min-height:46px;padding:6px 14px;gap:12px;border-bottom:1px solid color-mix(in srgb,var(--accent) 55%,var(--line));background:color-mix(in srgb,var(--accent) 20%,var(--surface));color:var(--ink);box-shadow:none}
+.incoming-label strong{font-size:12.5px}
+.incoming-label small{color:var(--ink-2)}
+.incoming-rooms button{padding:5px 11px;border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line));border-radius:10px;background:var(--surface);box-shadow:none}
+.incoming-rooms button:hover{background:var(--surface-2);border-color:color-mix(in srgb,var(--accent) 80%,var(--line))}
+.incoming-rooms span{color:var(--ink-3)}
+.incoming-rooms b{color:var(--ink-2)}
+#incoming-dismiss{color:var(--ink-2)}
+
+/* Theme switch */
+#theme-toggle svg{width:19px;height:19px}
+.theme-choice{display:grid;grid-template-columns:repeat(3,1fr)}
+
+@media(max-width:1050px){body:not(.floating) .shell{grid-template-columns:60px 280px minmax(0,1fr)}.conversation-list .chat-row{padding-left:10px}}
+
+/* Tabs inside dialogs: underline style instead of filled pills */
+.search-tabs{gap:2px;padding:0;border-bottom:1px solid var(--line)}
+.search-tabs button{position:relative;padding:9px 14px 11px;border-radius:8px 8px 0 0;background:transparent;color:var(--ink-3);font-size:12.5px;font-weight:600}
+.search-tabs button:hover{color:var(--ink-2)}
+.search-tabs button.active{background:transparent;color:var(--ink)}
+.search-tabs button.active::after{content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:2px;border-radius:2px;background:var(--accent)}
+#collection-status,#search-status,#pins-status{margin:10px 2px 4px;color:var(--ink-3);font-size:11.5px}
+.search-result{border-top-color:var(--line-soft)}
+.search-result:first-child{border-top:0}
+.search-result-heading small{color:var(--ink-3)}
+.search-result-copy{color:var(--ink-2)}
+
+/* Focus: a soft accent ring on fields, a plain ring on buttons */
+input:focus-visible,textarea:focus-visible,select:focus-visible{outline:none;border-color:color-mix(in srgb,var(--accent) 80%,var(--line));box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 24%,transparent)}
+.composer-wrap textarea:focus-visible,.search input:focus-visible{border-color:transparent;box-shadow:none}
+input[type=checkbox]:focus-visible,input[type=color]:focus-visible{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 35%,transparent)}
+button:focus-visible{outline:2px solid color-mix(in srgb,var(--ink) 55%,transparent);outline-offset:2px}
+
+/* Quick switcher and lists */
+.switcher-list button.active{background:var(--surface-3)}
+.switcher-list button:hover:not(.active){background:var(--surface-2)}
+.switcher-hint{border-top-color:var(--line-soft);background:var(--surface-2);color:var(--ink-3)}
+.switcher-search{border-color:var(--line)}
+.room-summary{background:var(--surface-2)}
+.room-summary small,.room-note{color:var(--ink-3)}
+.room-members,.browse-result,#room-invite-result:not(:empty){border-color:var(--line)}
+.room-member,.browse-row,.browse-result .person-row{border-top-color:var(--line-soft)}
+.browse-result .person-row:hover{background:var(--surface-2)}
+.person-row{border-radius:10px}
+.person-row:hover{background:var(--surface-2)}
+.room-role,.group-chip{background:color-mix(in srgb,var(--accent) 30%,var(--surface));color:var(--ink)}
+.room-member em{background:var(--surface-3);color:var(--ink-2)}
+
+/* Message hover and small labels */
+.message:hover .bubble{box-shadow:0 1px 1.5px color-mix(in srgb,var(--shadow) 9%,transparent),0 0 0 1px color-mix(in srgb,var(--ink) 6%,transparent)}
+.thread-link,.edited-label,.post-pin-label{font-size:10.5px}
+.reply-banner{border-radius:10px}

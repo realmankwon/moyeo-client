@@ -31,6 +31,7 @@ for (const name of ['channelReadStates', 'connect', 'channels', 'users', 'posts'
 for (const name of ['channelMembers', 'setChannelNotify', 'myStatus', 'browseChannels', 'joinChannel', 'createChannel', 'createGroup', 'channelDetail', 'addChannelMember', 'leaveChannel', 'patchChannel', 'savedPostIds', 'savedPosts', 'setSavedPost', 'executeCommand', 'postAction']) api[name] = (...args) => ipcRenderer.invoke(name, ...args);
 api.getSettings = () => ipcRenderer.invoke('settings:get');
 api.saveSettings = data => ipcRenderer.invoke('settings:save', data);
+api.onTheme = listener => { const handler = (_event, value) => listener(value); ipcRenderer.on('settings:theme', handler); return () => ipcRenderer.removeListener('settings:theme', handler); };
 api.pickImage = key => ipcRenderer.invoke('settings:image', key);
 api.importLegacyData = () => ipcRenderer.invoke('settings:importLegacy');
 api.getUpdateState = () => ipcRenderer.invoke('updates:state');

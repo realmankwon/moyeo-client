@@ -23,6 +23,8 @@ const icons = {
   attach: '<path d="m8 13 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l9-9m-6 12 7-7"/>'
 };
 icons.lock = '<rect x="5.5" y="10" width="13" height="10" rx="2.5"/><path d="M8.5 10V7a3.5 3.5 0 0 1 7 0v3m-3.5 4v2"/>';
+icons.moon = '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/>';
+icons.sun = '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>';
 icons.hash = '<path d="m10 4-3 16M17 4l-3 16M5 9h15M4 15h15"/>';
 icons.palette = '<path d="M12 3a9 9 0 1 0 0 18c1.4 0 2-.9 2-1.8 0-1.5-1.1-1.7-1.1-3 0-1 .8-1.7 1.8-1.7H17a4 4 0 0 0 4-4c0-4.2-4-7.5-9-7.5Z"/><path d="M7.5 12h.1M9.5 8h.1M14 7.5h.1"/>';
 icons.popout = '<path d="M14 5h5v5M19 5l-8 8M11 6H6a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-5"/>';
@@ -49,9 +51,28 @@ document.addEventListener('error', event => { if (event.target.matches?.('img[da
 const clock = value => value ? new Date(value).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '';
 let toastTimer;
 function toast(message) { const el = $('#toast'); el.textContent = message; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 4500); }
+const themeQuery = matchMedia('(prefers-color-scheme: dark)');
+const DEFAULT_CHAT_BACKGROUND = '#e8eef3';
+function activeTheme() { const choice = state.settings.theme || 'system'; return choice === 'system' ? (themeQuery.matches ? 'dark' : 'light') : choice; }
+async function setTheme(choice) {
+  try { state.settings = api ? await api.saveSettings({ theme: choice }) : { ...state.settings, theme: choice }; }
+  catch (error) { toast(error.message); return; }
+  applySettings();
+}
+function paintThemeToggle() {
+  const button = $('#theme-toggle'); if (!button) return;
+  const dark = activeTheme() === 'dark', label = dark ? '라이트 모드로 전환' : '다크 모드로 전환';
+  button.innerHTML = icon(dark ? 'sun' : 'moon'); button.title = label; button.setAttribute('aria-label', label);
+}
+themeQuery.addEventListener('change', () => applySettings());
+api?.onTheme?.(theme => { state.settings.theme = theme; applySettings(); });
 function applySettings() {
+  const dark = activeTheme() === 'dark';
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
   document.documentElement.style.setProperty('--accent', state.settings.accent);
-  document.documentElement.style.setProperty('--chat-background', state.settings.chatBackground);
+  // A chat background the user never changed follows the theme; a chosen color is kept as is.
+  document.documentElement.style.setProperty('--chat-background', dark && String(state.settings.chatBackground).toLowerCase() === DEFAULT_CHAT_BACKGROUND ? '#14161a' : state.settings.chatBackground);
+  paintThemeToggle();
   const hex = state.settings.accent.slice(1);
   const rgb = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16));
   document.documentElement.style.setProperty('--accent-ink', (rgb[0] * .299 + rgb[1] * .587 + rgb[2] * .114) > 150 ? '#302b16' : '#ffffff');
@@ -207,10 +228,11 @@ function refreshFavoriteButtons() {
   bindFavorites();
 }
 function renderShell() {
-  root.innerHTML = `<main class="shell"><aside class="rail" aria-label="주 메뉴"><span class="brandmark" title="${esc(state.settings.name)}">${imageOrIcon('logo', 'chat')}</span><nav class="rail-nav"><button class="nav-button" id="nav-people" title="사용자 찾기">${imageOrIcon('peopleIcon', 'people')}<span>사람</span></button><button class="nav-button active" id="nav-chats" title="채팅 목록">${imageOrIcon('chatIcon', 'chat')}<span>채팅</span></button></nav><div class="rail-bottom"><button class="nav-button" id="nav-settings" title="설정">${imageOrIcon('settingsIcon', 'settings')}<span>설정</span></button><button class="icon-btn" id="logout" title="${state.demo ? '데모 나가기' : '로그아웃'}" aria-label="로그아웃">${icon('logout')}</button>${avatar(displayName(state.me), 3, true)}</div></aside><section class="conversation-list"><header class="list-head"><div class="heading-row"><h1>채팅<span>${state.channels.length}</span></h1><button class="icon-btn" id="new-chat" title="새 개인 대화" aria-label="새 개인 대화">${icon('plus')}</button></div><div class="search">${icon('search')}<input id="channel-search" placeholder="대화방, 이름 검색" aria-label="대화방 검색" value="${esc(state.search)}"></div><div class="tabs"><button class="tab ${state.filter === 'all' ? 'active' : ''}" data-filter="all">전체</button><button class="tab ${state.filter === 'direct' ? 'active' : ''}" data-filter="direct">개인</button><button class="tab ${state.filter === 'group' ? 'active' : ''}" data-filter="group">그룹 · 채널</button></div></header><div class="list-scroll" id="channel-list"></div><footer class="list-footer"><span class="status-dot"></span><span id="connection-label">${state.demo ? '데모 공간 · 서버 연결 없음' : '실시간 연결됨'}</span></footer></section><section class="chat-pane" id="chat-pane"></section></main>`;
+  root.innerHTML = `<main class="shell"><aside class="rail" aria-label="주 메뉴"><span class="brandmark" title="${esc(state.settings.name)}">${imageOrIcon('logo', 'chat')}</span><nav class="rail-nav"><button class="nav-button" id="nav-people" title="사용자 찾기">${imageOrIcon('peopleIcon', 'people')}<span>사람</span></button><button class="nav-button active" id="nav-chats" title="채팅 목록">${imageOrIcon('chatIcon', 'chat')}<span>채팅</span></button></nav><div class="rail-bottom"><button class="icon-btn" id="theme-toggle"></button><button class="nav-button" id="nav-settings" title="설정">${imageOrIcon('settingsIcon', 'settings')}<span>설정</span></button><button class="icon-btn" id="logout" title="${state.demo ? '데모 나가기' : '로그아웃'}" aria-label="로그아웃">${icon('logout')}</button>${avatar(displayName(state.me), 3, true)}</div></aside><section class="conversation-list"><header class="list-head"><div class="heading-row"><h1>채팅<span>${state.channels.length}</span></h1><button class="icon-btn" id="new-chat" title="새 개인 대화" aria-label="새 개인 대화">${icon('plus')}</button></div><div class="search">${icon('search')}<input id="channel-search" placeholder="대화방, 이름 검색" aria-label="대화방 검색" value="${esc(state.search)}"></div><div class="tabs"><button class="tab ${state.filter === 'all' ? 'active' : ''}" data-filter="all">전체</button><button class="tab ${state.filter === 'direct' ? 'active' : ''}" data-filter="direct">개인</button><button class="tab ${state.filter === 'group' ? 'active' : ''}" data-filter="group">그룹 · 채널</button></div></header><div class="list-scroll" id="channel-list"></div><footer class="list-footer"><span class="status-dot"></span><span id="connection-label">${state.demo ? '데모 공간 · 서버 연결 없음' : '실시간 연결됨'}</span></footer></section><section class="chat-pane" id="chat-pane"></section></main>`;
   state.ready = true;
   $('.rail-bottom > .avatar').outerHTML = accountAvatar(state.me.id, true);
   $('.tabs').innerHTML = [['all', '전체'], ['channel', '채널'], ['direct', 'DM'], ['group', '그룹'], ['favorite', '★']].map(([key, label]) => `<button class="tab ${state.filter === key ? 'active' : ''}" data-filter="${key}" aria-label="${key === 'favorite' ? '즐겨찾기만 보기' : label}">${label}</button>`).join('');
+  $('#theme-toggle').onclick = () => setTheme(activeTheme() === 'dark' ? 'light' : 'dark'); paintThemeToggle();
   $('#nav-settings').onclick = openSettings;
   $('#new-chat').onclick = $('#nav-people').onclick = openPeople;
   $('#nav-chats').onclick = () => $('#channel-search').focus();
@@ -426,8 +448,9 @@ async function openPeople() {
 function openSettings() {
   const dialog = $('#settings-dialog');
   const imageRows = [['logo', '앱 로고', 'chat'], ['chatIcon', '채팅 메뉴 아이콘', 'chat'], ['peopleIcon', '사람 메뉴 아이콘', 'people'], ['settingsIcon', '설정 메뉴 아이콘', 'settings']];
-  dialog.innerHTML = `<form id="settings-form"><div class="dialog-head"><h2 id="settings-title">우리 팀에 맞게</h2><button type="button" class="icon-btn" id="settings-close" aria-label="닫기">${icon('close')}</button></div><p class="dialog-intro">이름부터 작은 아이콘까지, 원하는 모습으로 꾸며보세요.<br>이 설정은 이 PC에 저장됩니다.</p><label class="field"><span>앱 이름</span><input name="name" maxlength="24" value="${esc(state.settings.name)}" required></label><section class="settings-section"><p class="section-label">LOGO & ICONS</p>${imageRows.map(([key, label, fallback]) => `<div class="image-setting"><div class="image-preview" id="preview-${key}">${imageOrIcon(key, fallback)}</div><span>${label}</span><button type="button" data-image="${key}">이미지 가져오기</button></div>`).join('')}<small>PNG, JPG, WebP, ICO · 최대 5MB</small></section><section class="settings-section"><p class="section-label">COLORS</p><div class="colors"><label class="color-setting">강조색<input name="accent" type="color" value="${esc(state.settings.accent)}"></label><label class="color-setting">채팅 배경<input name="chatBackground" type="color" value="${esc(state.settings.chatBackground)}"></label></div></section><div class="dialog-footer"><button class="text-btn" type="button" id="reset-settings">기본값으로 되돌리기</button><button class="primary" type="submit">설정 저장</button></div></form>`;
+  dialog.innerHTML = `<form id="settings-form"><div class="dialog-head"><h2 id="settings-title">우리 팀에 맞게</h2><button type="button" class="icon-btn" id="settings-close" aria-label="닫기">${icon('close')}</button></div><p class="dialog-intro">이름부터 작은 아이콘까지, 원하는 모습으로 꾸며보세요.<br>이 설정은 이 PC에 저장됩니다.</p><label class="field"><span>앱 이름</span><input name="name" maxlength="24" value="${esc(state.settings.name)}" required></label><section class="settings-section"><p class="section-label">LOGO & ICONS</p>${imageRows.map(([key, label, fallback]) => `<div class="image-setting"><div class="image-preview" id="preview-${key}">${imageOrIcon(key, fallback)}</div><span>${label}</span><button type="button" data-image="${key}">이미지 가져오기</button></div>`).join('')}<small>PNG, JPG, WebP, ICO · 최대 5MB</small></section><section class="settings-section"><p class="section-label">THEME</p><div class="segmented theme-choice" role="group" aria-label="화면 테마">${[['system', '시스템 설정', '운영체제를 따름'], ['light', '라이트', '밝은 화면'], ['dark', '다크', '어두운 화면']].map(([value, label, hint]) => `<button type="button" data-theme-choice="${value}" aria-pressed="${(state.settings.theme || 'system') === value}"><strong>${label}</strong><small>${hint}</small></button>`).join('')}</div></section><section class="settings-section"><p class="section-label">COLORS</p><div class="colors"><label class="color-setting">강조색<input name="accent" type="color" value="${esc(state.settings.accent)}"></label><label class="color-setting">채팅 배경<input name="chatBackground" type="color" value="${esc(state.settings.chatBackground)}"></label></div></section><div class="dialog-footer"><button class="text-btn" type="button" id="reset-settings">기본값으로 되돌리기</button><button class="primary" type="submit">설정 저장</button></div></form>`;
   $('#settings-close').onclick = () => dialog.close();
+  dialog.querySelectorAll('[data-theme-choice]').forEach(button => button.onclick = async () => { await setTheme(button.dataset.themeChoice); dialog.querySelectorAll('[data-theme-choice]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.themeChoice === (state.settings.theme || 'system')))); });
   if (state.me) {
     $('.dialog-footer', dialog).insertAdjacentHTML('beforebegin', '<section class="settings-section"><p class="section-label">대화창 테마</p><button type="button" class="secondary" id="all-chat-theme">전체 대화창 꾸미기</button><p class="dialog-intro" style="margin-top:9px;margin-bottom:0">배경·말풍선·글자색을 모든 대화창에 한 번에 적용합니다.</p></section>');
     $('#all-chat-theme').onclick = () => personal.openTheme('all');
