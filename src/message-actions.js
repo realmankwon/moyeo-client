@@ -16,6 +16,9 @@ const messageActions = (() => {
     replies.set(state.selected, { rootId: post.root_id || post.id, name: displayName(state.users[post.user_id]), preview: post.message }); paintReply();
     if ($('#message-input').hidden) $('#preview-toggle').click(); $('#message-input').focus();
   }
+  // Takes the pending reply for a message that is being sent; restore() puts it back if sending fails.
+  function hold(channel) { const reply = replies.get(channel) || null; if (reply) { replies.delete(channel); paintReply(channel); } return reply; }
+  function restore(channel, reply) { if (reply && !replies.has(channel)) { replies.set(channel, reply); paintReply(channel); } }
   function sent(channel, root) { if (replyRoot(channel) === root) { replies.delete(channel); paintReply(channel); } }
   function controls() { return ''; }
   function closeMenu(focus = false) { const menu = document.getElementById('message-context-menu'); if (!menu) return; const id = menu.dataset.postId, link = menuLink; menuLink = null; menu.hidden = true; menu.innerHTML = ''; if (focus) { if (link?.isConnected) link.focus(); else if (id) document.querySelector(`[data-message-id="${id}"]`)?.focus(); } }
@@ -157,5 +160,5 @@ const messageActions = (() => {
     const button = event.target.closest('[data-post-action]'); if (button) { event.preventDefault(); closeMenu(); run(button.dataset.postAction, button.dataset.postId); }
   });
   function reset() { replies = new Map(); originals = new Map(); originalRequests = new Map(); ticket++; $('#message-dialog').close(); closeMenu(); }
-  return { mount, paintReply, replyRoot, sent, controls, annotation, reference, hydrateReferences, reset };
+  return { mount, paintReply, replyRoot, sent, hold, restore, controls, annotation, reference, hydrateReferences, reset };
 })();

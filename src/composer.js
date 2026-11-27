@@ -66,7 +66,7 @@ const composer = (() => {
     const items = list(channel);
     $('#queued-files').innerHTML = items.map((item, index) => `<div class="queued-file"><span>📎</span><span class="queued-name">${esc(item.name)}<small>${item.id ? '업로드 완료' : '전송 대기'} · ${Math.max(1, Math.round(item.size / 1024))} KB</small></span><button type="button" data-remove-file="${index}" aria-label="${esc(item.name)} 첨부 취소" ${busy.has(channel) ? 'disabled' : ''}>×</button></div>`).join('');
     document.querySelectorAll('[data-remove-file]').forEach(button => button.onclick = () => { const [item] = items.splice(Number(button.dataset.removeFile), 1); if (item?.key) api?.discardAttachment(item.key).catch(() => {}); update(); });
-    $('#send').disabled = busy.has(channel); $('#attach-files').disabled = busy.has(channel);
+    $('#attach-files').disabled = busy.has(channel);
     $('#send').textContent = busy.has(channel) ? '전송 중…' : '전송';
     $('#send-status').textContent = label;
   }
@@ -181,19 +181,37 @@ const composer = (() => {
     };
     dialog.showModal();
   }
-  async function send(event) {
+  // Messages leave the input the moment Enter is pressed and are delivered one at a time per
+  // room, in the order typed. Clearing only after the server answered let the next message
+  // run into the previous one, and Enter was ignored while a send was still in flight.
+  const queues = new Map();
+  function send(event) {
     event.preventDefault(); const channel = state.selected, epoch = state.generation;
-    const input = $('#message-input'), message = input.value.trim(), items = [...list(channel)], rootId = messageActions.replyRoot(channel);
-    if (busy.has(channel) || (!message && !items.length)) return;
-    busy.add(channel); update(channel, items.length ? '첨부 파일 업로드 준비 중…' : '메시지 전송 중…');
+    const input = $('#message-input'), message = input.value.trim(), items = [...list(channel)];
+    if (!message && !items.length) return;
+    const reply = messageActions.hold(channel);
+    input.value = ''; delete state.drafts[channel]; $('#composer-preview').innerHTML = '';
+    attachments.set(channel, list(channel).filter(item => !items.includes(item)));
+    if (typeof mentions !== 'undefined') mentions.reset();
+    const entry = queues.get(channel) || { tail: Promise.resolve(), size: 0 }; queues.set(channel, entry);
+    entry.size++; busy.add(channel); update(channel, items.length ? '첨부 파일 업로드 준비 중…' : '메시지 전송 중…');
+    if (!input.hidden) input.focus();
+    entry.tail = entry.tail.then(() => deliver(channel, epoch, { message, items, reply })).finally(() => {
+      entry.size--;
+      if (entry.size || epoch !== state.generation) return;
+      if (queues.get(channel) === entry) queues.delete(channel);
+      busy.delete(channel); update(channel);
+    });
+    return entry.tail;
+  }
+  async function deliver(channel, epoch, { message, items, reply }) {
+    const rootId = reply?.rootId || '';
     try {
+      if (epoch !== state.generation) return;
       // Mattermost slash commands run on the server instead of being posted as text.
       if (!state.demo && !items.length && !rootId && /^\/[^\s/]/.test(message)) {
         const room = state.channels.find(item => item.id === channel);
         await api.executeCommand(channel, message, room?.team_id || Object.keys(state.teams)[0] || '');
-        if (epoch !== state.generation) return;
-        if (state.drafts[channel]?.trim() === message) delete state.drafts[channel];
-        if (state.selected === channel && $('#message-input').value.trim() === message) $('#message-input').value = '';
         return;
       }
       for (let index = 0; index < items.length; index++) {
@@ -206,20 +224,25 @@ const composer = (() => {
       if (epoch !== state.generation) return;
       if (state.demo) (state.demoPosts[channel] ||= []).push(post);
       incoming.noteOwn(post);
-      messageActions.sent(channel, rootId);
-      attachments.set(channel, list(channel).filter(item => !items.includes(item)));
       for (const item of items) if (item.key) api.discardAttachment(item.key).catch(() => {});
-      if (state.drafts[channel]?.trim() === message) delete state.drafts[channel];
       if (state.selected === channel) {
         if (!state.posts.some(item => item.id === post.id)) state.posts.push(post);
-        if ($('#message-input').value.trim() === message) $('#message-input').value = '';
-        $('#composer-preview').innerHTML = ''; renderMessages(true);
+        renderMessages(true);
       }
       state.previews[channel] = post.message || `첨부 파일 ${items.length}개`;
       const room = state.channels.find(item => item.id === channel); if (room) room.last_post_at = post.create_at;
       state.channels.sort((a, b) => b.last_post_at - a.last_post_at); renderChannelList();
-    } catch (error) { if (epoch === state.generation) toast(`전송하지 못했습니다. ${cleanError(error)} 입력 내용과 첨부는 유지됩니다.`); }
-    finally { if (epoch === state.generation) { busy.delete(channel); update(channel); if (state.selected === channel) $('#message-input')?.focus(); } }
+    } catch (error) {
+      if (epoch !== state.generation) return;
+      // Put the failed message back in front of whatever was typed since, with its files and reply.
+      attachments.set(channel, [...items, ...list(channel)]);
+      messageActions.restore(channel, reply);
+      const box = state.selected === channel ? $('#message-input') : null, later = box ? box.value : state.drafts[channel] || '';
+      const restored = message + (message && later.trim() ? '\n' : '') + later;
+      if (restored) state.drafts[channel] = restored;
+      if (box) { box.value = restored; if ($('#composer-preview')) $('#composer-preview').innerHTML = format(restored); }
+      toast(`전송하지 못했습니다. ${cleanError(error)} 입력 내용과 첨부는 유지됩니다.`);
+    }
   }
   document.addEventListener('pointerdown', event => { if ($('#emoji-panel') && !event.target.closest('#emoji-panel,#emoji,#custom-emoji-dialog')) $('#emoji-panel').hidden = true; });
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && $('#emoji-panel') && !$('#emoji-panel').hidden) { event.preventDefault(); $('#emoji-panel').hidden = true; event.stopPropagation(); } });
