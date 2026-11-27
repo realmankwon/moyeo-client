@@ -17,7 +17,9 @@
   <link rel="stylesheet" href="search.css">
   <link rel="stylesheet" href="updates.css">
   <link rel="stylesheet" href="refresh.css">
+  <link rel="stylesheet" href="mail.css">
   <link rel="stylesheet" href="server-settings.css">
+  <link rel="stylesheet" href="rooms.css">
 </head>
 <body>
   <section id="incoming-header" role="region" aria-label="새 메시지 알림" aria-live="polite" hidden></section>
@@ -39,6 +41,10 @@
   <dialog id="status-emoji-dialog" aria-labelledby="status-emoji-title"></dialog>
   <dialog id="account-settings-dialog" aria-labelledby="account-settings-title"></dialog>
   <dialog id="pins-dialog" aria-labelledby="pins-title"></dialog>
+  <dialog id="room-dialog" aria-labelledby="room-title"></dialog>
+  <dialog id="browse-dialog" aria-labelledby="browse-title"></dialog>
+  <dialog id="collection-dialog" aria-labelledby="collection-title"></dialog>
+  <dialog id="switcher-dialog" aria-label="빠른 전환"></dialog>
   <div id="message-context-menu" class="message-context-menu" role="menu" aria-label="메시지 작업" hidden></div>
   <script src="format.js"></script>
   <script src="emoji-data.js"></script>
@@ -63,7 +69,11 @@
   <script src="server-settings.js"></script>
   <script src="pins.js"></script>
   <script src="mentions.js"></script>
+  <script src="unreads.js"></script>
   <script src="app.js"></script>
+  <script src="bot-attachments.js"></script>
+  <script src="collections.js"></script>
+  <script src="rooms.js"></script>
   <script src="updates.js"></script>
   <script src="incoming.js"></script>
   <script src="typing.js"></script>

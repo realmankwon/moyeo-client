@@ -235,6 +235,114 @@ class MattermostClient {
   async view(id) {
     return (await this.request('/channels/members/me/view', { method: 'POST', body: { channel_id: validId(id) } })).data;
   }
+  async channelMembers() {
+    if (!this.me) throw new Error('먼저 로그인해 주세요.');
+    const epoch = this.mediaKey, teams = await this.teams(), members = new Map();
+    await Promise.all((Array.isArray(teams) ? teams : []).slice(0, 50).map(async team => {
+      try {
+        const data = (await this.request(`/users/me/teams/${validId(team.id)}/channels/members`)).data;
+        if (!Array.isArray(data)) return;
+        for (const item of data) {
+          if (!ID.test(item?.channel_id)) continue;
+          members.set(item.channel_id, { channel_id: item.channel_id, msg_count: Number(item.msg_count) || 0, mention_count: Number(item.mention_count) || 0, last_viewed_at: Number(item.last_viewed_at) || 0, notify_props: { desktop: String(item.notify_props?.desktop || 'default'), mark_unread: String(item.notify_props?.mark_unread || 'all') } });
+        }
+      } catch { /* One unavailable team must not hide the other teams' counts. */ }
+    }));
+    if (epoch !== this.mediaKey) throw new Error('계정이 변경되었습니다.');
+    return [...members.values()];
+  }
+  async setChannelNotify(id, level) {
+    if (!this.me) throw new Error('먼저 로그인해 주세요.');
+    const values = { all: { desktop: 'all', mark_unread: 'all' }, mention: { desktop: 'mention', mark_unread: 'all' }, mute: { desktop: 'none', mark_unread: 'mention' } }[level];
+    if (!values) throw new Error('알림 설정값이 올바르지 않습니다.');
+    await this.request(`/channels/${validId(id)}/members/${validId(this.me.id)}/notify_props`, { method: 'PUT', body: { user_id: this.me.id, channel_id: id, ...values } });
+    return values;
+  }
+  async myStatus() { const data = (await this.request('/users/me/status')).data; return typeof data?.status === 'string' ? data.status : ''; }
+  async browseChannels(team, term = '') {
+    validId(team);
+    if (typeof term !== 'string' || term.length > 100) throw new Error('채널 검색어를 확인해 주세요.');
+    const data = term.trim()
+      ? (await this.request(`/teams/${team}/channels/search`, { method: 'POST', body: { term: term.trim() } })).data
+      : (await this.request(`/teams/${team}/channels?page=0&per_page=100`)).data;
+    return (Array.isArray(data) ? data : []).filter(channel => channel?.type === 'O' && !channel.delete_at);
+  }
+  async joinChannel(id) {
+    if (!this.me) throw new Error('먼저 로그인해 주세요.');
+    await this.request(`/channels/${validId(id)}/members`, { method: 'POST', body: { user_id: this.me.id } });
+    return (await this.request(`/channels/${id}`)).data;
+  }
+  async createChannel(options = {}) {
+    const { team, displayName, type = 'O', purpose = '' } = options;
+    validId(team);
+    const title = typeof displayName === 'string' ? displayName.trim() : '';
+    if (title.length < 1 || title.length > 64) throw new Error('채널 이름은 1~64자로 입력해 주세요.');
+    if (!['O', 'P'].includes(type) || typeof purpose !== 'string' || purpose.length > 250) throw new Error('채널 설정을 확인해 주세요.');
+    // Channel URLs only allow lowercase ASCII, so non-Latin titles get a random handle.
+    const slug = title.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+    const name = (slug.length >= 2 ? slug + '-' : 'ch-') + randomUUID().replace(/-/g, '').slice(0, 8);
+    return (await this.request('/channels', { method: 'POST', body: { team_id: team, name, display_name: title, type, purpose: purpose.trim() } })).data;
+  }
+  async createGroup(ids) {
+    if (!this.me) throw new Error('먼저 로그인해 주세요.');
+    if (!Array.isArray(ids)) throw new Error('대화 상대를 선택해 주세요.');
+    const users = [...new Set([this.me.id, ...ids.map(validId)])];
+    if (users.length < 3 || users.length > 8) throw new Error('그룹 대화는 나를 포함해 3~8명으로 만들 수 있습니다.');
+    return (await this.request('/channels/group', { method: 'POST', body: users })).data;
+  }
+  async channelDetail(id) {
+    validId(id);
+    const epoch = this.mediaKey;
+    const [channel, stats, members] = await Promise.all([
+      this.request(`/channels/${id}`).then(result => result.data),
+      this.request(`/channels/${id}/stats`).then(result => result.data).catch(() => ({})),
+      this.request(`/channels/${id}/members?page=0&per_page=100`).then(result => result.data).catch(() => [])
+    ]);
+    const list = (Array.isArray(members) ? members : []).filter(item => ID.test(item?.user_id));
+    const users = list.length ? await this.users(list.map(item => item.user_id)) : [];
+    if (epoch !== this.mediaKey) throw new Error('계정이 변경되었습니다.');
+    return { channel, count: Number(stats?.member_count) || users.length, users, admins: list.filter(item => item.scheme_admin).map(item => item.user_id) };
+  }
+  async addChannelMember(id, user) {
+    return (await this.request(`/channels/${validId(id)}/members`, { method: 'POST', body: { user_id: validId(user) } })).data;
+  }
+  async leaveChannel(id) {
+    if (!this.me) throw new Error('먼저 로그인해 주세요.');
+    return (await this.request(`/channels/${validId(id)}/members/${validId(this.me.id)}`, { method: 'DELETE' })).data;
+  }
+  async patchChannel(id, values = {}) {
+    const body = {};
+    for (const [key, limit] of [['display_name', 64], ['header', 1024], ['purpose', 250]]) {
+      if (values[key] === undefined) continue;
+      if (typeof values[key] !== 'string' || values[key].length > limit) throw new Error('채널 정보를 확인해 주세요.');
+      body[key] = values[key].trim();
+    }
+    if (body.display_name === '') throw new Error('채널 이름을 입력해 주세요.');
+    return (await this.request(`/channels/${validId(id)}/patch`, { method: 'PUT', body })).data;
+  }
+  async savedPostIds() {
+    const preferences = (await this.request('/users/me/preferences')).data;
+    return (Array.isArray(preferences) ? preferences : []).filter(item => item.category === 'flagged_post' && item.value === 'true' && ID.test(item.name)).map(item => item.name);
+  }
+  async savedPosts() { return (await this.request('/users/me/posts/flagged?page=0&per_page=60')).data; }
+  async setSavedPost(id, enabled) {
+    if (!this.me) throw new Error('먼저 로그인해 주세요.');
+    if (typeof enabled !== 'boolean') throw new Error('저장 상태를 확인해 주세요.');
+    const body = [{ user_id: this.me.id, category: 'flagged_post', name: validId(id), value: 'true' }];
+    await this.request(enabled ? '/users/me/preferences' : '/users/me/preferences/delete', { method: enabled ? 'PUT' : 'POST', body });
+    return enabled;
+  }
+  async executeCommand(channel, command, team = '') {
+    validId(channel); if (team) validId(team);
+    if (typeof command !== 'string' || !/^\/[^\s/]/.test(command) || command.length > 16000) throw new Error('명령어를 확인해 주세요.');
+    return (await this.request('/commands/execute', { method: 'POST', body: { channel_id: channel, command, ...(team ? { team_id: team } : {}) } })).data;
+  }
+  async postAction(post, action, option) {
+    validId(post);
+    if (typeof action !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(action)) throw new Error('버튼 정보를 확인해 주세요.');
+    if (option !== undefined && (typeof option !== 'string' || option.length > 512)) throw new Error('선택값을 확인해 주세요.');
+    return (await this.request(`/posts/${post}/actions/${action}`, { method: 'POST', body: option === undefined ? {} : { selected_option: option } })).data;
+  }
   async disconnect() {
     try { if (this.token && this.ownedSession) await this.request('/users/logout', { method: 'POST' }); }
     finally { this.clear(); }

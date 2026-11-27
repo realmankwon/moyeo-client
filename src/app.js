@@ -24,6 +24,8 @@ const icons = {
 };
 icons.lock = '<rect x="5.5" y="10" width="13" height="10" rx="2.5"/><path d="M8.5 10V7a3.5 3.5 0 0 1 7 0v3m-3.5 4v2"/>';
 icons.hash = '<path d="m10 4-3 16M17 4l-3 16M5 9h15M4 15h15"/>';
+icons.palette = '<path d="M12 3a9 9 0 1 0 0 18c1.4 0 2-.9 2-1.8 0-1.5-1.1-1.7-1.1-3 0-1 .8-1.7 1.8-1.7H17a4 4 0 0 0 4-4c0-4.2-4-7.5-9-7.5Z"/><path d="M7.5 12h.1M9.5 8h.1M14 7.5h.1"/>';
+icons.popout = '<path d="M14 5h5v5M19 5l-8 8M11 6H6a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-5"/>';
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const icon = key => `<svg viewBox="0 0 24 24" aria-hidden="true">${icons[key] || icons.chat}</svg>`;
 const imageOrIcon = (key, fallback) => state.settings[key] ? `<img src="${esc(state.settings[key])}" alt="">` : key === 'logo' ? '<img class="default-brand" src="assets/icons/brand.svg" alt="">' : icon(fallback);
@@ -164,6 +166,9 @@ async function refreshChannels() {
   await hydrateUsers(channels.filter(c => c.type === 'D').flatMap(c => c.name.split('__')));
   if (epoch !== state.generation) return;
   state.channels = channels.sort((a, b) => b.last_post_at - a.last_post_at);
+  // Counts arrive separately so a slow or unsupported endpoint never delays the room list.
+  unreads.loadStatus();
+  unreads.load().then(() => { if (epoch === state.generation && $('#channel-list')) renderChannelList(); });
 }
 async function loadNavigation() {
   const epoch = state.generation;
@@ -216,6 +221,7 @@ function renderShell() {
     document.querySelectorAll('[data-filter]').forEach(b => b.classList.toggle('active', b === button));
     renderChannelList();
   });
+  rooms.mountShell();
   renderChannelList(); renderChat(); incoming.render();
 }
 let channelListView = '';
@@ -237,7 +243,7 @@ function renderChannelList() {
     const context = account && !preview ? `@${account.username}` : showTeam && teamLabel ? teamLabel : '';
     const date = new Date(c.last_post_at), validDate = c.last_post_at && Number.isFinite(date.getTime());
     const time = validDate ? date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
-    return `<div class="conversation-row ${state.selected === c.id ? 'is-selected' : ''} ${state.unread[c.id] ? 'has-unread' : ''}"><button class="chat-row ${state.selected === c.id ? 'selected' : ''}" data-channel="${esc(c.id)}" aria-pressed="${state.selected === c.id}" aria-description="${kind}">${conversationAvatar(c)}<span class="summary"><span class="row-heading"><span class="row-title" title="${esc(name)}">${account?userStatus.name(account):esc(name)}</span><time class="row-time" ${validDate ? `datetime="${date.toISOString()}" title="${esc(date.toLocaleString('ko-KR'))}"` : ''}>${time}</time></span>${context || preview || state.unread[c.id] ? `<span class="row-detail">${context ? `<span class="row-context ${account ? 'is-account' : ''}" title="${esc(context)}">${esc(context)}</span>` : ''}${preview ? `<span class="row-preview" title="${esc(preview)}">${esc(preview)}</span>` : ''}${state.unread[c.id] ? `<span class="badge">${esc(state.unread[c.id])}</span>` : ''}</span>` : ''}</span></button>${favoriteButton(c)}</div>`;
+    return `<div class="conversation-row ${state.selected === c.id ? 'is-selected' : ''} ${state.unread[c.id] || unreads.any(c.id) ? 'has-unread' : ''} ${unreads.level(c.id) === 'mute' ? 'is-muted' : ''}"><button class="chat-row ${state.selected === c.id ? 'selected' : ''}" data-channel="${esc(c.id)}" aria-pressed="${state.selected === c.id}" aria-description="${kind}">${conversationAvatar(c)}<span class="summary"><span class="row-heading"><span class="row-title" title="${esc(name)}">${account?userStatus.name(account):esc(name)}${unreads.level(c.id) === 'mute' ? '<span class="row-muted" title="알림 끔" aria-label="알림 끔">🔕</span>' : ''}</span><time class="row-time" ${validDate ? `datetime="${date.toISOString()}" title="${esc(date.toLocaleString('ko-KR'))}"` : ''}>${time}</time></span>${context || preview || state.unread[c.id] || unreads.any(c.id) ? `<span class="row-detail">${context ? `<span class="row-context ${account ? 'is-account' : ''}" title="${esc(context)}">${esc(context)}</span>` : ''}${preview ? `<span class="row-preview" title="${esc(preview)}">${esc(preview)}</span>` : ''}${unreads.badge(c.id)}</span>` : ''}</span></button>${favoriteButton(c)}</div>`;
   };
   const sections = [];
   const append = (label, items, key) => {
@@ -275,7 +281,7 @@ async function selectChannel(id) {
     if (state.selected !== id || epoch !== state.generation || loading!==state.loadingTicket) return;
     state.posts = Object.values(result.posts).filter(p => !p.delete_at).sort((a, b) => a.create_at - b.create_at);
     state.hasMore = result.order.length === 60;
-    state.previews[id] = state.posts.at(-1)?.message || '';
+    state.previews[id] = state.posts.at(-1)?.message || botAttachments.summary(state.posts.at(-1)) || '';
     renderMessages(true); renderChannelList();
     await api.view(id);
   } catch (error) { if (state.selected === id) toast(error.message); }
@@ -289,12 +295,13 @@ function renderChat() {
   $('.header-actions').insertAdjacentHTML('afterbegin', `<button class="secondary library-open" id="open-library" title="사진·동영상·파일 모아보기">사진·파일</button>`);
   $('.chat-header > .avatar').outerHTML = conversationAvatar(channel, true);
   $('.header-actions').insertAdjacentHTML('afterbegin', favoriteButton(channel, true)); bindFavorites();
-  $('.header-actions').insertAdjacentHTML('afterbegin', '<button class="icon-btn" id="room-theme" title="대화방 꾸미기" aria-label="대화방 꾸미기">🎨</button>');
+  $('.header-actions').insertAdjacentHTML('afterbegin', '<button class="icon-btn" id="room-theme" title="대화방 꾸미기" aria-label="대화방 꾸미기">' + icon('palette') + '</button>');
   if(!state.demo){$('.header-actions').insertAdjacentHTML('afterbegin',`<button class="icon-btn" id="message-search" title="메시지·파일 검색 (Ctrl+F)" aria-label="메시지·파일 검색">${icon('search')}</button>`);$('#message-search').onclick=()=>messageSearch.open();}
-  if(!state.demo&&!isFloating){$('.header-actions').insertAdjacentHTML('afterbegin','<button class="icon-btn" id="open-floating" title="이 채팅방을 별도 창으로 열기" aria-label="채팅방 별도 창으로 열기">↗</button>');$('#open-floating').onclick=async event=>{const button=event.currentTarget;button.disabled=true;try{await api.openFloatingChat(channel.id);}catch(error){toast(error.message);}finally{button.disabled=false;}};}
+  if(!state.demo&&!isFloating){$('.header-actions').insertAdjacentHTML('afterbegin','<button class="icon-btn" id="open-floating" title="이 채팅방을 별도 창으로 열기" aria-label="채팅방 별도 창으로 열기">'+icon('popout')+'</button>');$('#open-floating').onclick=async event=>{const button=event.currentTarget;button.disabled=true;try{await api.openFloatingChat(channel.id);}catch(error){toast(error.message);}finally{button.disabled=false;}};}
   if(isFloating){$('.header-actions').insertAdjacentHTML('afterbegin','<button class="icon-btn" id="float-pin" aria-label="항상 위에 표시" title="항상 위에 표시" aria-pressed="'+(state.floatingTop?'true':'false')+'">📌</button>');$('#float-pin').onclick=async event=>{const button=event.currentTarget;try{const enabled=await api.setFloatingTop(button.getAttribute('aria-pressed')!=='true');state.floatingTop=enabled;button.setAttribute('aria-pressed',String(enabled));}catch(error){toast(error.message);}};}
   $('#room-theme').onclick = personal.openTheme;
   messagePins.mount();
+  rooms.mountHeader(channel);
   personal.apply();
   messageNavigation.paint();
   $('#open-library').onclick = media.openLibrary;
@@ -353,11 +360,11 @@ function renderMessages(scroll = false) {
     const date = new Date(post.create_at).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
     const divider = date !== lastDate ? `<div class="date-divider">${esc(date)}</div>` : ''; lastDate = date;
     const self = post.user_id === state.me.id, name = displayName(state.users[post.user_id]);
-    const attachmentMarkup = media.attachments(post);
-    const message = post.message || (attachmentMarkup ? '' : '(시스템 메시지)');
+    const attachmentMarkup = media.attachments(post), cards = botAttachments.markup(post);
+    const message = post.message || (attachmentMarkup || cards ? '' : '(시스템 메시지)');
     const minute = Math.floor(post.create_at / 60000), showTime = minute !== lastMinute; lastMinute = minute;
     const continued = !divider && post.user_id === lastAuthor && post.create_at - lastAt < 300000; lastAuthor = post.user_id; lastAt = post.create_at;
-    return `${divider}<article class="message ${self ? 'self' : ''} ${continued ? 'continued' : ''}" data-message-id="${esc(post.id)}" tabindex="0">${self ? '' : accountAvatar(post.user_id, true)}<div class="message-content">${self ? '' : `<div class="sender">${userStatus.name(state.users[post.user_id])}</div>`}${messageActions.reference(post)}<div class="bubble-row ${message ? '' : 'media-only'}">${message ? `<div class="bubble rich-text" data-message="${esc(message)}">${composer.format(message)}</div>` : attachmentMarkup}${showTime ? `<time datetime="${new Date(post.create_at).toISOString()}">${clock(post.create_at)}</time>` : ''}</div>${message ? attachmentMarkup : ''}${linkPreviews.markup(post)}${messageActions.annotation(post)}${reactions.markup(post)}</div></article>`;
+    return `${divider}<article class="message ${self ? 'self' : ''} ${continued ? 'continued' : ''} ${post.type === 'system_ephemeral' ? 'ephemeral' : ''}" data-message-id="${esc(post.id)}" tabindex="0">${self ? '' : accountAvatar(post.user_id, true)}<div class="message-content">${self ? '' : `<div class="sender">${userStatus.name(state.users[post.user_id])}</div>`}${messageActions.reference(post)}<div class="bubble-row ${message ? '' : 'media-only'}">${message ? `<div class="bubble rich-text" data-message="${esc(message)}">${composer.format(message)}</div>` : attachmentMarkup}${showTime ? `<time datetime="${new Date(post.create_at).toISOString()}">${clock(post.create_at)}</time>` : ''}</div>${message ? attachmentMarkup : ''}${cards}${post.type === 'system_ephemeral' ? '<span class="ephemeral-label">나에게만 보이는 메시지</span>' : ''}${linkPreviews.markup(post)}${messageActions.annotation(post)}${reactions.markup(post)}</div></article>`;
   }).join('') || '<div class="empty">아직 메시지가 없어요.<br>첫 인사를 건네보세요.</div>';
   if (scroll) area.scrollTop = area.scrollHeight;
   else area.scrollTop = oldTop + area.scrollHeight - oldHeight;
@@ -467,7 +474,7 @@ function openSettings() {
   dialog.showModal();
 }
 async function logout(skipServer = false) {
-  serverSettings.reset();messagePins.reset();
+  serverSettings.reset();messagePins.reset();rooms.reset();collections.reset();
   historyCleanup();historyPositionCleanup();state.historyLoading=false;
   if(typeof mentions!=='undefined')mentions.reset();
   if(typeof realtime!=='undefined')realtime.reset();
@@ -479,7 +486,7 @@ async function logout(skipServer = false) {
   personal.reset(); gifs.reset();
   messageActions.reset();
   reactions.reset();
-  incoming.reset();
+  incoming.reset(); unreads.reset();
   state.ready = false; state.teams = {}; state.favorites = new Set(); state.favoritePending = new Set(); state.favoritesReady = false;
   state.generation++; state.me = null; state.selected = null; state.channels = []; state.posts = []; state.users = {}; state.drafts = {}; state.previews = {}; state.unread = {}; state.search = ''; state.filter = 'all';
   const wasDemo = state.demo; state.demo = false;
@@ -497,6 +504,7 @@ async function poll() {
     await hydrateUsers(channels.filter(c => c.type === 'D').flatMap(c => c.name.split('__')));
     if (epoch !== state.generation) return;
     state.channels = channels.sort((a, b) => b.last_post_at - a.last_post_at);
+    unreads.load().then(() => { if (epoch === state.generation && $('#channel-list')) renderChannelList(); });
     const windowActive = await api.isWindowActive();
     if (epoch !== state.generation) return;
     const activeChannels=await api.getActiveChannels();

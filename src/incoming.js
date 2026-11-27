@@ -3,15 +3,17 @@ const incoming = (() => {
   const roomTitle = channel => channel.type === 'D' ? `${channelName(channel)} · @${state.users[directUserId(channel)]?.username || ''}` : `${state.teams[channel.team_id]?.display_name ? `${state.teams[channel.team_id].display_name} · ` : ''}${channelName(channel)}`;
   function start() { connectedAt = Date.now(); }
   function noteOwn(post) { ownTimes.set(post.channel_id, Math.max(ownTimes.get(post.channel_id) || 0, post.create_at || 0)); }
-  function receive(channels, previous, windowActive, activeChannels=[]) {
+  function receive(channels, previous, windowActive, activeChannels=[], mentioned=new Set()) {
     if (!state.me || state.demo || isFloating) return;
     let changed = false;
     for (const channel of channels) {
       const old = previous.find(item => item.id === channel.id);
       if (!channel.last_post_at || channel.last_post_at <= (old?.last_post_at || connectedAt) || channel.last_post_at <= Math.max(ownTimes.get(channel.id) || 0, readTimes.get(channel.id) || 0)) continue;
       if ((channel.id === state.selected && windowActive) || activeChannels.includes(channel.id)) { markRead(channel.id); continue; }
+      // Muted rooms and unmentioned posts in mention-only rooms only update the list badge.
+      if (!unreads.alerts(channel, mentioned.has(channel.id))) continue;
       rooms.set(channel.id, { time: channel.last_post_at }); state.unread[channel.id] = '새 글'; changed = true;
-      api.notifyIncoming({ channel: channel.id, title: roomTitle(channel) }).catch(() => {});
+      if (!unreads.quiet()) api.notifyIncoming({ channel: channel.id, title: roomTitle(channel) }).catch(() => {});
     }
     if (changed) { dismissed = false; render(); const header = $('#incoming-header'); header.classList.remove('new-arrival'); requestAnimationFrame(() => header.classList.add('new-arrival')); }
     else if (rooms.size) render();
@@ -26,7 +28,7 @@ const incoming = (() => {
     for(const [id,time]of Object.entries(times)){
       if(!/^[a-z0-9]{26}$/.test(id)||!Number.isSafeInteger(time)||time<0)continue;
       const latest=Math.max(readTimes.get(id)||0,time);readTimes.set(id,latest);
-      const unread=rooms.get(id);if(unread&&unread.time<=latest)markRead(id);
+      const unread=rooms.get(id);if(unread&&unread.time<=latest)markRead(id);else unreads.read(id,latest);
     }
   }
   function reconcile(ids=[...rooms.keys()]) {
@@ -54,7 +56,7 @@ const incoming = (() => {
     api?.setIncomingCount(entries.length).catch(() => {});
   }
   function markRead(id) {
-    const changed = rooms.delete(id), unread = state.unread[id];
+    const changed = rooms.delete(id), unread = state.unread[id] || unreads.clear(id); unreads.clear(id);
     if(!rooms.size){clearTimeout(readTimer);readTimer=0;}
     delete state.unread[id];
     if (!state.demo && changed) api.clearIncoming(id).catch(() => {});

@@ -18,10 +18,10 @@ const messageActions = (() => {
   }
   function sent(channel, root) { if (replyRoot(channel) === root) { replies.delete(channel); paintReply(channel); } }
   function controls() { return ''; }
-  function closeMenu(focus = false) { const menu = $('#message-context-menu'); if (!menu) return; const id = menu.dataset.postId, link = menuLink; menuLink = null; menu.hidden = true; menu.innerHTML = ''; if (focus) { if (link?.isConnected) link.focus(); else if (id) document.querySelector(`[data-message-id="${id}"]`)?.focus(); } }
+  function closeMenu(focus = false) { const menu = document.getElementById('message-context-menu'); if (!menu) return; const id = menu.dataset.postId, link = menuLink; menuLink = null; menu.hidden = true; menu.innerHTML = ''; if (focus) { if (link?.isConnected) link.focus(); else if (id) document.querySelector(`[data-message-id="${id}"]`)?.focus(); } }
   function openMenu(post, x, y, link = null) {
     const menu = $('#message-context-menu'), own = post.user_id === state.me.id && !post.type?.startsWith('system_');
-    menu.innerHTML = [['pin',post.is_pinned?'메시지 고정 해제':'메시지 고정'],['react','이모지 반응'],['reply','답장'],['share','공유'],['copy','내용 복사'],['link','원문 링크 복사'],...(own ? [['edit','수정'],['delete','삭제']] : [])].map(([action,label]) => `<button type="button" role="menuitem" data-post-action="${action}" data-post-id="${esc(post.id)}">${label}</button>`).join('');
+    menu.innerHTML = [['pin',post.is_pinned?'메시지 고정 해제':'메시지 고정'],['react','이모지 반응'],['reply','답장'],['share','공유'],['copy','내용 복사'],['link','원문 링크 복사'],['save',collections.isSaved(post.id)?'저장 해제':'메시지 저장'],...(own ? [['edit','수정'],['delete','삭제']] : [])].map(([action,label]) => `<button type="button" role="menuitem" data-post-action="${action}" data-post-id="${esc(post.id)}">${label}</button>`).join('');
     menuLink = link;
     if (link) menu.insertAdjacentHTML('afterbegin', `<button type="button" role="menuitem" data-copy-link="${esc(link.dataset.link)}">링크 주소 복사</button>`);
     menu.dataset.postId = post.id; menu.hidden = false;
@@ -40,7 +40,7 @@ const messageActions = (() => {
   window.addEventListener('resize', () => closeMenu());
   function annotation(post) {
     const count = Math.max(post.reply_count || 0, state.posts.filter(item => item.root_id === post.id).length);
-    return `${post.is_pinned?'<span class="post-pin-label">📌 고정된 메시지</span>':''}${post.edit_at ? '<span class="edited-label">수정됨</span>' : ''}${post.root_id || count ? `<button class="thread-link" data-post-action="thread" data-post-id="${esc(post.root_id || post.id)}">${post.root_id ? '↳ 원문·답글 보기' : `답글 ${count}개 보기`}</button>` : ''}`;
+    return `${post.is_pinned?'<span class="post-pin-label">📌 고정된 메시지</span>':''}${collections.isSaved(post.id)?'<span class="post-pin-label post-saved-label">🔖 저장한 메시지</span>':''}${post.edit_at ? '<span class="edited-label">수정됨</span>' : ''}${post.root_id || count ? `<button class="thread-link" data-post-action="thread" data-post-id="${esc(post.root_id || post.id)}">${post.root_id ? '↳ 원문·답글 보기' : `답글 ${count}개 보기`}</button>` : ''}`;
   }
   function referenceBody(root) {
     if (root.delete_at) return '<p class="reply-reference-missing">삭제된 원문입니다.</p>';
@@ -94,6 +94,7 @@ const messageActions = (() => {
     const post = state.posts.find(item => item.id === id), epoch = state.generation, channel = state.selected;
     try {
       if (action === 'pin') return messagePins.toggle(id);
+      if (action === 'save') return collections.toggle(id);
       if (action === 'react') return reactions.openPicker(id);
       if (action === 'thread') return thread(id);
       if (action === 'original') return await messageNavigation.openPost(id);

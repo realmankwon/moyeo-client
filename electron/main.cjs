@@ -63,6 +63,7 @@ if (singleInstance) app.whenReady().then(async () => {
     title: '모여 · Mattermost', icon: appIconPath, autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true, backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' } });
   chatWindows.register(win);
+  require('./context-menu.cjs').attachContextMenu(electron, win);
   handle('openFloatingChat',channel=>chatWindows.open(channel));
   handle('closeChatWindow',()=>{const owner=chatWindows.owner();setImmediate(()=>{if(owner&&!owner.isDestroyed())owner.close();});return true;});
   handle('getFloatingContext',()=>chatWindows.floatingContext());
@@ -180,6 +181,7 @@ if (singleInstance) app.whenReady().then(async () => {
   registerFiles(client, handle, () => chatWindows.owner()||win, giphy, publicLinkPreviews);
   const resetComposer = registerComposer(client, handle, () => chatWindows.owner()||win, giphy);
   handle('disconnect', async () => {incomingReady=false;desktop.resetActivation(); chatWindows.closeFloating();systemConsole.close(); typing.stop(); await sessions.clear(); resetComposer(); giphy.reset(); publicLinkPreviews.reset(); const connected=!!client.me;try{return await client.disconnect();}finally{if(connected)chatWindows.broadcast('account:cleared');} });
+  for (const method of ['channelMembers', 'setChannelNotify', 'myStatus', 'browseChannels', 'joinChannel', 'createChannel', 'createGroup', 'channelDetail', 'addChannelMember', 'leaveChannel', 'patchChannel', 'savedPostIds', 'savedPosts', 'setSavedPost', 'executeCommand', 'postAction']) handle(method, (...args) => client[method](...args));
   handle('channelReadStates',ids=>client.channelReadStates(ids));
   handle('view',async channel=>{const epoch=client.mediaKey,result=await client.view(channel);if(epoch!==client.mediaKey)throw Error('계정이 변경되었습니다.');if(result.last_viewed_at_times&&typeof result.last_viewed_at_times==='object')chatWindows.broadcast('chat:realtime',{type:'channels_viewed',times:result.last_viewed_at_times});else chatWindows.read(channel);return result;});
   handle('send',async(...args)=>{const result=await client.send(...args);chatWindows.broadcast('chat:posted',result);return result;});

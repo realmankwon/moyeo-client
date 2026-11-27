@@ -187,6 +187,15 @@ const composer = (() => {
     if (busy.has(channel) || (!message && !items.length)) return;
     busy.add(channel); update(channel, items.length ? '첨부 파일 업로드 준비 중…' : '메시지 전송 중…');
     try {
+      // Mattermost slash commands run on the server instead of being posted as text.
+      if (!state.demo && !items.length && !rootId && /^\/[^\s/]/.test(message)) {
+        const room = state.channels.find(item => item.id === channel);
+        await api.executeCommand(channel, message, room?.team_id || Object.keys(state.teams)[0] || '');
+        if (epoch !== state.generation) return;
+        if (state.drafts[channel]?.trim() === message) delete state.drafts[channel];
+        if (state.selected === channel && $('#message-input').value.trim() === message) $('#message-input').value = '';
+        return;
+      }
       for (let index = 0; index < items.length; index++) {
         if (epoch !== state.generation) return;
         update(channel, `파일 업로드 ${index + 1}/${items.length} · ${items[index].name}`);

@@ -1,0 +1,38 @@
+.chat-pane .bubble:has(> .mail-notice) {
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.mail-notice {
+  max-width: 440px;
+  padding: 12px 14px;
+  border: 1px solid #dce2eb;
+  border-radius: 13px;
+  background: #fff;
+  color: #263144;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.mail-notice-header { display: flex; align-items: center; gap: 7px; color: #4b5c75; font-size: .85em; font-weight: 700; }
+.mail-notice-icon { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 7px; background: #edf2ff; color: #3b5a94; font-size: 15px; }
+.mail-notice .mail-notice-subject { margin: 8px 0 5px; font-size: 1.18em; font-weight: 750; }
+.mail-notice-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 7px; color: #526176; font-size: .88em; }
+.mail-notice-meta > strong { color: #39465a; font-size: inherit; }
+.mail-notice-meta > time { color: inherit; font-size: inherit; }
+.mail-notice-excerpt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  overflow: hidden;
+  margin-top: 10px;
+  color: #42516a;
+  white-space: pre-line;
+}
+
+.mail-notice-footer { margin-top: 11px; padding-top: 7px; border-top: 1px solid #e7ebf1; }
+.mail-notice-open { display: inline-flex; align-items: center; gap: 5px; padding: 3px 5px; margin-inline-start: -5px; border-radius: 5px; color: #28549a; font-size: .9em; font-weight: 700; }
+.mail-notice-open:hover { background: #edf2ff; }

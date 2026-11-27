@@ -70,7 +70,10 @@ const media = (() => {
   }
   function attachments(post) {
     const urls = new Set(), text = (post.message || '').replace(/```[\s\S]*?```|`[^`]*`/g, '');
-    const candidates = [...(text.match(/https:\/\/[^\s<>"')\]]+/gi) || []), ...(Array.isArray(post.props?.attachments) ? post.props.attachments.map(item => item.image_url).filter(Boolean) : [])];
+    const candidates = RichText.isMailNotice(post.message) ? [] : [
+      ...(text.match(/https:\/\/[^\s<>"')\]]+/gi) || []),
+      ...(Array.isArray(post.props?.attachments) ? post.props.attachments.map(item => item.image_url).filter(Boolean) : []),
+    ];
     for (const address of candidates) {
       try { const url = new URL(address); if (/^(media\d*|i)\.giphy\.com$/i.test(url.hostname) && url.protocol === 'https:' && !url.username && !url.password && /\.(gif|webp)$/i.test(url.pathname)) urls.add(url.href); } catch { /* Ordinary links remain text links. */ }
     }
